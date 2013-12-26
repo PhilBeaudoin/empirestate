@@ -1,4 +1,4 @@
 empirestate
 ===========
 
-Empire state boardgame sumulator
+Empire state boardgame simulator.
