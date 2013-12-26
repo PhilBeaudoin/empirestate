@@ -162,9 +162,9 @@ class BoardTests(unittest.TestCase):
       self.assertEqual(0, b.revenues[Resources.Red])
       self.assertEqual(0, b.revenues[Resources.Green])
       self.assertEqual(0, b.revenues[Resources.Blue])
-      self.assertEqual(10, b.revenues[Resources.Iron])
-      self.assertEqual(10, b.revenues[Resources.Brick])
-      self.assertEqual(10, b.revenues[Resources.Glass])
+      self.assertEqual(8, b.revenues[Resources.Iron])
+      self.assertEqual(8, b.revenues[Resources.Brick])
+      self.assertEqual(8, b.revenues[Resources.Glass])
 
   def testPrepareTurn(self):
     # Try a bunch of "random" boards, use an initial seed, however, so that the
@@ -181,7 +181,7 @@ class BoardTests(unittest.TestCase):
       self.assertIn(b.upgrades[0], upgradesA())
       self.assertIn(b.upgrades[1], upgradesA())
       self.assertIn(b.upgrades[2], upgradesA())
-      self.assertEqual([5, 7], b.bank)
+      self.assertEqual([4, 6], b.bank)
       b.prepareTurn()
       b.prepareTurn()
       b.prepareTurn()
@@ -193,7 +193,7 @@ class BoardTests(unittest.TestCase):
       self.assertIn(b.upgrades[0], upgradesA())
       self.assertIn(b.upgrades[1], upgradesA())
       self.assertIn(b.upgrades[2], upgradesA())
-      self.assertEqual([5, 7], b.bank)
+      self.assertEqual([4, 6], b.bank)
       b.prepareTurn()
       self.assertEqual(3, len(b.investments))
       self.assertEqual(3, len(b.upgrades))
@@ -203,7 +203,7 @@ class BoardTests(unittest.TestCase):
       self.assertIn(b.upgrades[0], upgradesB())
       self.assertIn(b.upgrades[1], upgradesB())
       self.assertIn(b.upgrades[2], upgradesB())
-      self.assertEqual([5, 7], b.bank)
+      self.assertEqual([4, 6], b.bank)
 
 def main():
     unittest.main()

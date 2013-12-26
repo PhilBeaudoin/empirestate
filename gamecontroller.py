@@ -263,10 +263,10 @@ class BoardControllerTests(unittest.TestCase):
     gc.prepareTurn()
     gc.turnIndex = 2
     gc.prepareTurn()
-    self.assertEqual(4, gc.players[0].numActions)
-    self.assertEqual(4, gc.players[1].numActions)
-    self.assertEqual(4, gc.players[2].numActions)
-    self.assertEqual(4, gc.players[3].numActions)
+    self.assertEqual(3, gc.players[0].numActions)
+    self.assertEqual(3, gc.players[1].numActions)
+    self.assertEqual(3, gc.players[2].numActions)
+    self.assertEqual(3, gc.players[3].numActions)
     gc.turnIndex = 3
     gc.prepareTurn()
     self.assertEqual(4, gc.players[0].numActions)
@@ -274,6 +274,12 @@ class BoardControllerTests(unittest.TestCase):
     self.assertEqual(4, gc.players[2].numActions)
     self.assertEqual(4, gc.players[3].numActions)
     gc.turnIndex = 4
+    gc.prepareTurn()
+    self.assertEqual(4, gc.players[0].numActions)
+    self.assertEqual(4, gc.players[1].numActions)
+    self.assertEqual(4, gc.players[2].numActions)
+    self.assertEqual(4, gc.players[3].numActions)
+    gc.turnIndex = 5
     gc.prepareTurn()
     self.assertEqual(5, gc.players[0].numActions)
     self.assertEqual(5, gc.players[1].numActions)
@@ -438,8 +444,8 @@ class BoardControllerTests(unittest.TestCase):
     # Check player 0's red column.
     self.assertEqual(3, gc.players[0].columns[Resources.Red].getLevel())
     cards = gc.players[0].columns[Resources.Red].getCards()
-    self.assertIn(ShareCard(1, Resources.Red, 4), cards)
-    self.assertIn(ShareCard(3, Resources.Red), cards)
+    self.assertIn(ShareCard(1, Resources.Red, 2), cards)
+    self.assertIn(ShareCard(2, Resources.Red), cards)
 
     # Check the revenue areas.
     self.assertEqual(4, b.revenues[Resources.Red])
@@ -458,10 +464,10 @@ class BoardControllerTests(unittest.TestCase):
     self.assertTrue(gc.tryBuild(gc.players[0]))
 
     # Check player 0's green column.
-    self.assertEqual(2, gc.players[0].columns[Resources.Green].getLevel())
+    self.assertEqual(1, gc.players[0].columns[Resources.Green].getLevel())
     cards = gc.players[0].columns[Resources.Green].getCards()
-    self.assertIn(ShareCard(1, Resources.Green, 7), cards)
-    self.assertIn(ShareCard(2, Resources.Green), cards)
+    self.assertIn(ShareCard(1, Resources.Green, 4), cards)
+    self.assertIn(ShareCard(1, Resources.Green), cards)
 
     # Check the revenue areas.
     self.assertEqual(14, b.revenues[Resources.Glass])
@@ -478,10 +484,10 @@ class BoardControllerTests(unittest.TestCase):
     self.assertTrue(gc.tryBuild(gc.players[1]))
 
     # Check player 1's red column.
-    self.assertEqual(4, gc.players[1].columns[Resources.Red].getLevel())
+    self.assertEqual(3, gc.players[1].columns[Resources.Red].getLevel())
     cards = gc.players[1].columns[Resources.Red].getCards()
-    self.assertIn(ShareCard(1, Resources.Red, 6), cards)
-    self.assertIn(ShareCard(4, Resources.Red), cards)
+    self.assertIn(ShareCard(1, Resources.Red, 3), cards)
+    self.assertIn(ShareCard(3, Resources.Red), cards)
 
     # Check the revenue areas.
     self.assertEqual(6, b.revenues[Resources.Red])
@@ -561,10 +567,11 @@ class BoardControllerTests(unittest.TestCase):
     # Distributed = 44 + 12 + 7 = 63.
     # Player 0 also received 5$ in dividend.
     # Player 3 also received 1$ in dividend.
-    self.assertEqual(15 + 5, gc.players[0].amount)
-    self.assertEqual(16, gc.players[1].amount)
-    self.assertEqual(16, gc.players[2].amount)
-    self.assertEqual(16 + 3, gc.players[3].amount)
+    # Everybody artificially receive 3$ + 3$ = 6$ (because it's turn 3)
+    self.assertEqual(15 + 5 + 6, gc.players[0].amount)
+    self.assertEqual(16 + 6, gc.players[1].amount)
+    self.assertEqual(16 + 6, gc.players[2].amount)
+    self.assertEqual(16 + 3 + 6, gc.players[3].amount)
 
     # Check player's investment columns and amounts
     self.assertIn(ShareCard(2, Resources.Red),

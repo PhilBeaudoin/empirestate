@@ -28,7 +28,7 @@ class BuildingCard(Card):
     self.resource = resource
     self.type = 'building'
   def flip(self):
-    return ShareCard(1, self.column, self.level)
+    return ShareCard(1, self.column, -(-self.level/2))  # To do "ceil"
 
 class RoofCard(Card):
   def __init__(self, level, progress = 0):
