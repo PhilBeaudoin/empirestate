@@ -5,6 +5,7 @@ Resources = enum('Red', 'Green', 'Blue', 'Iron', 'Brick', 'Glass', 'Bank')
 Firms = [Resources.Red, Resources.Green, Resources.Blue]
 Goods = [Resources.Iron, Resources.Brick, Resources.Glass]
 FirmsOrGoods = Firms + Goods
+AllResources = Resources.reverse_mapping.keys()
 
 def isFirm(resource):
   return (resource >= 0 and resource <= 2);
@@ -30,39 +31,57 @@ def mainGoods(firm):
                        Resources.reverse_mapping[firm])
   return firm + 3;
 
+def mainFirm(goods):
+  if not isGoods(goods):
+    raise RuntimeError('Resource is not a goods ' +
+                       Resources.reverse_mapping[goods])
+  return goods - 3;
+
 class ResourceTests(unittest.TestCase):
+
   def testNextFirmFail(self):
     with self.assertRaises(RuntimeError):
-      nextFirm(Resources.Glass);
+      nextFirm(Resources.Glass)
     with self.assertRaises(RuntimeError):
-      nextFirm(Resources.Bank);
+      nextFirm(Resources.Bank)
 
   def testNextFirm(self):
-    self.assertEqual(Resources.Red, nextFirm(Resources.Blue));
-    self.assertEqual(Resources.Green, nextFirm(Resources.Red));
-    self.assertEqual(Resources.Blue, nextFirm(Resources.Green));
+    self.assertEqual(Resources.Red, nextFirm(Resources.Blue))
+    self.assertEqual(Resources.Green, nextFirm(Resources.Red))
+    self.assertEqual(Resources.Blue, nextFirm(Resources.Green))
 
   def testNextGoodsFail(self):
     with self.assertRaises(RuntimeError):
-      nextGoods(Resources.Blue);
+      nextGoods(Resources.Blue)
     with self.assertRaises(RuntimeError):
-      nextGoods(Resources.Bank);
+      nextGoods(Resources.Bank)
 
-  def testNextFirm(self):
-    self.assertEqual(Resources.Brick, nextGoods(Resources.Iron));
-    self.assertEqual(Resources.Glass, nextGoods(Resources.Brick));
-    self.assertEqual(Resources.Iron, nextGoods(Resources.Glass));
+  def testNextGoods(self):
+    self.assertEqual(Resources.Brick, nextGoods(Resources.Iron))
+    self.assertEqual(Resources.Glass, nextGoods(Resources.Brick))
+    self.assertEqual(Resources.Iron, nextGoods(Resources.Glass))
 
   def testMainGoodsFail(self):
     with self.assertRaises(RuntimeError):
-      mainGoods(Resources.Iron);
+      mainGoods(Resources.Iron)
     with self.assertRaises(RuntimeError):
-      mainGoods(Resources.Bank);
+      mainGoods(Resources.Bank)
 
   def testMainGoods(self):
-    self.assertEqual(Resources.Glass, mainGoods(Resources.Blue));
-    self.assertEqual(Resources.Iron, mainGoods(Resources.Red));
-    self.assertEqual(Resources.Brick, mainGoods(Resources.Green));
+    self.assertEqual(Resources.Glass, mainGoods(Resources.Blue))
+    self.assertEqual(Resources.Iron, mainGoods(Resources.Red))
+    self.assertEqual(Resources.Brick, mainGoods(Resources.Green))
+
+  def testMainFirmFail(self):
+    with self.assertRaises(RuntimeError):
+      mainFirm(Resources.Green)
+    with self.assertRaises(RuntimeError):
+      mainFirm(Resources.Bank)
+
+  def testMainFirm(self):
+    self.assertEqual(Resources.Blue, mainFirm(Resources.Glass))
+    self.assertEqual(Resources.Red, mainFirm(Resources.Iron))
+    self.assertEqual(Resources.Green, mainFirm(Resources.Brick))
 
 def main():
     unittest.main()
