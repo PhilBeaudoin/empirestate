@@ -17,6 +17,10 @@ class CardColumn:
   def popLargest(self):
     card = heapq.heappop(self._cards)[1]
     return card
+  def getLargest(self):
+    if not self._cards:
+      return 0
+    return self._cards[0][1]
   def getLevel(self):
     if not self._cards:
       return 0

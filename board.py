@@ -8,6 +8,7 @@ from cardcolumn import CardColumn
 from cards import *
 from player import Player
 
+_initialConfidenceMarker = 40
 _firmTrackTrigger = 6
 _firmTrackLength = 10
 _shareValueBracket = [
@@ -42,8 +43,8 @@ def cardsA():
     LoanCard(8, 1, 1),
     LoanCard(7, 1, 1),
 
-    PlusLevelCard(1, 2),
-    PlusLevelCard(1, 2),
+    PlusLevelCard(1, 1),
+    PlusLevelCard(1, 1),
     WorkforceCard(1, 2),
     WorkforceCard(0, 1),
     WorkforceCard(0, 1),
@@ -54,11 +55,14 @@ def cardsA():
     FactoryCard(Resources.Brick, 1, 1),
     FactoryCard(Resources.Glass, 1, 1),
 
-    GoodsCard(Resources.Iron, 4, 1),
-    GoodsCard(Resources.Brick, 4, 1),
-    GoodsCard(Resources.Glass, 4, 1),
+    GoodsCard(Resources.Iron, 5, 0),
+    GoodsCard(Resources.Brick, 5, 0),
+    GoodsCard(Resources.Glass, 5, 0),
     MoneyForLevelCard(3, 5, 1),
     MoneyForLevelCard(4, 6, 1),
+
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
   ]
 
 def cardsB():
@@ -88,6 +92,11 @@ def cardsB():
     BonusTokenCard(5, 0),
     BonusTokenCard(5, 0),
     BonusTokenCard(5, 0),
+
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
   ]
 
 def cardsC():
@@ -116,7 +125,16 @@ def cardsC():
     UpgradeCard(0),
     UpgradeCard(0),
     UpgradeCard(0),
-    UpgradeCard(0)
+    UpgradeCard(0),
+
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard(),
   ]
 
 def initialBuildings(firm):
@@ -124,18 +142,16 @@ def initialBuildings(firm):
   second = resources.nextGoods(first)
   third = resources.nextGoods(second)
   result = [
-    BuildingCard(2, firm, Resources.Bank),
-    BuildingCard(2, firm, Resources.Bank),
-    BuildingCard(2, firm, Resources.Bank),
     BuildingCard(3, firm, firm),
     BuildingCard(3, firm, firm),
     BuildingCard(3, firm, firm),
     BuildingCard(4, firm, first),
     BuildingCard(4, firm, first),
     BuildingCard(4, firm, first),
-#    BuildingCard(5, firm, second),
     BuildingCard(5, firm, second),
     BuildingCard(5, firm, second),
+    BuildingCard(5, firm, second),
+    BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
@@ -176,7 +192,7 @@ class Board:
       { 'counts': [2, 2], 'playerId': None },
       { 'counts': [4], 'playerId': None },
     ]
-    self.confidenceMarker = 40
+    self.confidenceMarker = _initialConfidenceMarker
     self.shareScore = {firm: 0 for firm in Firms}
     self.buildingColumn = {}
     for firm in Firms:
@@ -197,9 +213,14 @@ class Board:
 
   def prepareTurn(self):
     # Draw 11 cards.
-    self.cardsAvailable = self.cardStack[-11:]
+    self.cardsAvailable = []
+    while len(self.cardsAvailable) < 11:
+      card = self.cardStack.pop()
+      if card.type == CardTypes.ConfidenceDecrease:
+        self.advanceConfidenceMarker(1)
+      else:
+        self.cardsAvailable.insert(0, card)
     self.goodsOfCard = [good for good in Goods] + [None] * 8
-    self.cardStack = self.cardStack[:-11]
 
   def getCardByIndex(self, cardIndex):
     return self.cardsAvailable[cardIndex]
@@ -227,6 +248,13 @@ class Board:
   def playerOrderOnFirmTrack(self, firm):
     return [item for sublist in reversed(self.firmTracks[firm])
             for item in sublist]
+
+  def positionsOnFirmTrack(self, firm):
+    positions = {}
+    for position, space in enumerate(self.firmTracks[firm]):
+      for playerId in space:
+        positions[playerId] = position + 1
+    return positions
 
   def isFirmTrackTriggering(self, firm):
     for space in self.firmTracks[firm][_firmTrackTrigger - 1:]:
@@ -264,17 +292,23 @@ class Board:
         self.shareScore[firm] = max(0,
             self.shareScore[firm] - self.buildingColumn[firm].getProgress())
 
-  def getShareValue(self, firm):
+  def getShareValueForScore(self, score):
     for value, bound in enumerate(_shareValueBracket):
-      if self.shareScore[firm] <= bound:
+      if score <= bound:
         return value
     return len(_shareValueBracket)
 
-  def getInterests(self):
+  def getShareValue(self, firm):
+    return self.getShareValueForScore(self.shareScore[firm])
+
+  def getInterestsForMarker(self, marker):
     for value, bound in enumerate(_interestsBracket):
-      if self.confidenceMarker >= bound:
+      if marker >= bound:
         return value
     return len(_interestsBracket)
+
+  def getInterests(self):
+    return self.getInterestsForMarker(self.confidenceMarker)
 
   def buildForFirm(self, player, firm):
     if not self.roofStack:
@@ -290,6 +324,11 @@ class Board:
     player.setLevelCard(roofCard.flip())
     column.setRoof(self.roofStack.pop())
 
+  def printState(self):
+    for firm in Firms:
+      print 'Column ' + Resources.reverse_mapping[firm]
+      self.buildingColumn[firm].printState()
+
 class BoardTests(unittest.TestCase):
   def testInitialSetup(self):
     # Try a bunch of "random" boards, use an initial seed, however, so that the
@@ -303,7 +342,7 @@ class BoardTests(unittest.TestCase):
       self.assertEqual(2, b.buildingColumn[Resources.Red].roof.cardCount)
       self.assertEqual(2, b.buildingColumn[Resources.Green].roof.cardCount)
       self.assertEqual(2, b.buildingColumn[Resources.Blue].roof.cardCount)
-      self.assertEqual(66, len(b.cardStack))
+      self.assertEqual(80, len(b.cardStack))
       self.assertEqual(0, b.revenues[Resources.Red])
       self.assertEqual(0, b.revenues[Resources.Green])
       self.assertEqual(0, b.revenues[Resources.Blue])
@@ -319,7 +358,6 @@ class BoardTests(unittest.TestCase):
       b = Board()
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(55, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsA())
       self.assertEqual(Resources.Glass, b.goodsOfCardByIndex(2))
@@ -328,30 +366,37 @@ class BoardTests(unittest.TestCase):
       self.assertIsNone(b.goodsOfCardByIndex(2))
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(44, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsA())
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(33, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsB())
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(22, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsB())
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(11, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsC())
       b.prepareTurn()
       self.assertEqual(11, len(b.cardsAvailable))
-      self.assertEqual(0, len(b.cardStack))
       for card in b.cardsAvailable:
         self.assertIn(card, cardsC())
+
+  def testPrepareTurnWithConfidenceDecrease(self):
+      b = Board()
+      # cardStack is emptied from the last card, so the first
+      # ConfidenceDecreaseCard in the following list will be ignored.
+      b.cardStack = [UpgradeCard(i) for i in range(11)]
+      b.cardStack.insert(0, ConfidenceDecreaseCard())
+      b.cardStack.insert(3, ConfidenceDecreaseCard())
+      b.cardStack.insert(3, ConfidenceDecreaseCard())
+      b.cardStack.insert(6, ConfidenceDecreaseCard())
       b.prepareTurn()
+      self.assertEqual([UpgradeCard(i) for i in range(11)], b.cardsAvailable)
+      self.assertEqual(_initialConfidenceMarker - 3, b.confidenceMarker)
 
   def testAdvancePlayerOnFirmTrack(self):
     b = Board()
@@ -365,13 +410,17 @@ class BoardTests(unittest.TestCase):
     b.advancePlayerOnFirmTrack(p1, Resources.Red, 5)
     b.advancePlayerOnFirmTrack(p0, Resources.Red, 2)
     self.assertEqual([0,3,1], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual({0: 7, 1: 5, 3: 5}, b.positionsOnFirmTrack(Resources.Red))
     b.resetFirmTrack(Resources.Red)
     self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual({}, b.positionsOnFirmTrack(Resources.Red))
     b.advancePlayerOnFirmTrack(p2, Resources.Blue, 100)
     self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Blue))
+    self.assertEqual({2: 10}, b.positionsOnFirmTrack(Resources.Blue))
     b.advancePlayerOnFirmTrack(p2, Resources.Red, 5)
     b.advancePlayerOnFirmTrack(p2, Resources.Red, 5)
     self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual({2: 10}, b.positionsOnFirmTrack(Resources.Blue))
 
   def testIsFirmTrackTriggering(self):
     b = Board()

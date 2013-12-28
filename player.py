@@ -84,6 +84,26 @@ class Player:
         available[card.resource] += card.amount
     return available
 
+  def sellShares(self, shareValues):
+    for card in self.cards:
+      if card.name == 'share':
+        self.amount += card.multiplicity * shareValues[card.firm]
+    self.cards = [card for card in self.cards if not card.name == 'share']
+
+  def paybackLoans(self):
+    for card in self.cards:
+      if card.type == CardTypes.Loan:
+        self.amount = max(0, self.amount - card.value)
+    self.cards = [card for card in self.cards
+                  if not card.type == CardTypes.Loan]
+
+  def printState(self):
+    print "Player " + str(self.ident) + "  Amount: " + str(self.amount) + \
+        "  Level card: " + \
+        str(0 if not self.levelCard else self.levelCard.level)
+    for card in self.cards:
+      print "  " + cardToJson(card)
+
 class PlayerTests(unittest.TestCase):
   def testCanPayForBuilding(self):
     building = BuildingColumn(Resources.Red, [
@@ -211,6 +231,57 @@ class PlayerTests(unittest.TestCase):
     player.amount = 15
     self.assertEqual(5, player.payInterests(2))
     self.assertEqual(0, player.amount)
+
+  def testSellShares(self):
+    player = Player()
+    player.addCard(FactoryCard(Resources.Iron, 1, 1))
+    player.addCard(LoanCard(5, 2, 1))
+    player.addCard(ShareCard(Resources.Green, 3))
+    player.addCard(ShareCard(Resources.Red, 2))
+    player.addCard(GoodsCard(Resources.Glass, 5, 1))
+    player.addCard(ShareCard(Resources.Green, 2))
+    player.addCard(PlusLevelCard(1, 0))
+    player.addCard(ShareCard(Resources.Blue, 4))
+
+    player.sellShares({
+      Resources.Red:   5,
+      Resources.Green: 10,
+      Resources.Blue:  20
+    })
+
+    self.assertEqual(10 + 50 + 80, player.amount)
+    for card in player.cards:
+      self.assertNotEqual('share', card.name)
+
+  def testPaybackLoans(self):
+    player = Player()
+    cards = [
+      FactoryCard(Resources.Iron, 1, 1),
+      LoanCard(5, 2, 1),
+      ShareCard(Resources.Green, 3),
+      LoanCard(8, 2, 1),
+      GoodsCard(Resources.Glass, 5, 1),
+      EmergencyLoanCard(2, 1),
+      PlusLevelCard(1, 0),
+      LoanCard(3, 2, 1),
+    ];
+
+    player.amount = 100
+    for card in cards:
+      player.addCard(card)
+    player.paybackLoans()
+    self.assertEqual(100 - (5 + 8 + 10 + 3), player.amount)
+    for card in player.cards:
+      self.assertNotEqual(CardTypes.Loan, card.type)
+
+    player.amount = 10
+    for card in cards:
+      player.addCard(card)
+    player.paybackLoans()
+    self.assertEqual(0, player.amount)
+    for card in player.cards:
+      self.assertNotEqual(CardTypes.Loan, card.type)
+
 
 def main():
     unittest.main()

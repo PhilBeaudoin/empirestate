@@ -38,6 +38,9 @@ class BuildingColumn:
   def getLevel(self):
     return self.cardColumn.getLevel()
 
+  def getLargest(self):
+    return self.cardColumn.getLargest()
+
   def length(self):
     return self.cardColumn.length()
 
@@ -72,6 +75,9 @@ class BuildingColumn:
       amount -= neededFromAmount
       payments[card.resource] += level
     return payments
+
+  def printState(self):
+    print "  Count: " + str(self.length()) + "  Level: " + str(self.getLevel())
 
 class BuidingColumnTests(unittest.TestCase):
   def testMixedStackFail(self):

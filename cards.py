@@ -52,6 +52,11 @@ class LevelCard(Card):
     self.name = 'level'
     self.type = CardTypes.Level
 
+class ConfidenceDecreaseCard(Card):
+  def __init__(self):
+    self.name = 'confidenceDecrease'
+    self.type = CardTypes.ConfidenceDecrease
+
 class ShareCard(Card):
   def __init__(self, firm, multiplicity):
     self.firm = firm
