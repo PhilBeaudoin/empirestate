@@ -68,12 +68,14 @@ class Player:
         self.getResources())
     if payments is None:
       raise RuntimeError('Not enough money or resources to pay for building.')
+    needed = payments.copy()
     for card in self.cards:
       if card.name == 'factory' or card.name == 'goods':
-        paid = min(payments[card.resource], card.amount)
-        payments[card.resource] -= paid
+        paid = min(needed[card.resource], card.amount)
+        needed[card.resource] -= paid
         card.amount -= paid
-    self.amount -= sum(payments.values())
+    self.amount -= sum(needed.values())
+    return payments
 
   def getResources(self):
     available = {good: 0 for good in Goods}
@@ -90,7 +92,7 @@ class PlayerTests(unittest.TestCase):
       BuildingCard(4, Resources.Red, Resources.Iron),
       BuildingCard(4, Resources.Red, Resources.Iron)
     ])
-    building.setRoof(RoofCard(4))
+    building.setRoof(RoofCard(4, 0))
     player = Player(3, 3, 12)
     player.addCard(FactoryCard(Resources.Iron, 0, 0, 3))
     self.assertFalse(player.canPayForBuilding(building))
@@ -104,6 +106,8 @@ class PlayerTests(unittest.TestCase):
     player.amount = 1000
     self.assertFalse(
         player.canPayForBuilding(BuildingColumn(Resources.Red, [])))
+    building.setRoof(FinalRoofCard(10))
+    self.assertFalse(player.canPayForBuilding(building))
 
   def testPayForBuilding(self):
     building = BuildingColumn(Resources.Red, [
@@ -112,7 +116,7 @@ class PlayerTests(unittest.TestCase):
       BuildingCard(4, Resources.Red, Resources.Iron),
       BuildingCard(4, Resources.Red, Resources.Iron)
     ])
-    building.setRoof(RoofCard(4))
+    building.setRoof(RoofCard(4, 0))
     player = Player(3, 3, 16)
     player.addCard(FactoryCard(Resources.Iron, 0, 0, 3))
     player.payForBuilding(building)
@@ -124,6 +128,12 @@ class PlayerTests(unittest.TestCase):
     self.assertEqual(0, player.amount)
     self.assertEqual(0, player.cards[0].amount)
     self.assertEqual(12, player.cards[1].amount)
+    with self.assertRaises(RuntimeError):
+      player.payForBuilding(building)
+    building.setRoof(FinalRoofCard(10))
+    player.amount = 1000
+    with self.assertRaises(RuntimeError):
+      player.payForBuilding(building)
 
   def testGetLevel(self):
     player = Player(3, 3, 16)

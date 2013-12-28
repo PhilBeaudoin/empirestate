@@ -44,6 +44,9 @@ class BuildingColumn:
   def getProgress(self):
     return 0 if not self.roof else self.roof.progress
 
+  def popLargest(self):
+    return self.cardColumn.popLargest()
+
   def calculatePayment(self, amount = None, goods = None):
     """|amount| is the amount of money the player has, |goods| is a map from
        goods to the amount of goods of that type the player has. Returns None if

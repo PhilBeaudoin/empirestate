@@ -29,12 +29,12 @@ class BuildingCard(Card):
     self.name = 'building'
     self.type = CardTypes.Building
   def flip(self):
-    return ShareCard(1, self.firm, -(-self.level/2))  # To do "ceil"
+    return ShareCard(self.firm, -(-self.level/2))  # To do "ceil"
 
 class RoofCard(Card):
-  def __init__(self, cardCount, progress = 0):
+  def __init__(self, cardCount, progress):
     self.cardCount = cardCount
-    self.progress = progress if progress else cardCount
+    self.progress = progress
     self.name = 'roof'
     self.type = CardTypes.Roof
   def flip(self):
@@ -135,6 +135,7 @@ class LoanCard(Card):
 
 class EmergencyLoanCard(Card):
   def __init__(self, upkeep, progress):
+    self.value = 10
     self.upkeep = upkeep
     self.progress = progress
     self.name = 'emergencyLoan'

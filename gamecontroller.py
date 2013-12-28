@@ -37,7 +37,7 @@ class GameController:
   def playGame(self):
     for i in xrange(6):
       self.prepareTurn()
-      for j in xrange(5):
+      for j in xrange(6):
         for player in self.players:
           if player.numActions > j:
             self.takeAction(player)
@@ -53,8 +53,8 @@ class GameController:
     buildings = {}
     for firm in Firms:
       buildings[firm] = {
-        'size': self.board.buildingStack[firm].cardColumn.length(),
-        'level': self.board.buildingStack[firm].cardColumn.getLevel()
+        'size': self.board.buildingColumn[firm].cardColumn.length(),
+        'level': self.board.buildingColumn[firm].cardColumn.getLevel()
       }
 
     for player in self.players:
@@ -88,9 +88,9 @@ class GameController:
       'totalAmount': sum(amountOnResources.values()) + sum(amountPerPlayer) + \
                      sum(amountOnFactoriesPerPlayer),
       'numberOfBuilds': numberOfBuilds,
-      'shareValues': dict(self.board.shareValue),
+      'shareScores': dict(self.board.shareScore),
       'buildingsComplete':
-          sum([0 if self.board.buildingStack[f].roof else 1 for f in Firms]),
+          sum([0 if self.board.buildingColumn[f].roof else 1 for f in Firms]),
       'levelPerPlayer': levelPerPlayer
     })
 
@@ -153,21 +153,6 @@ class GameController:
     self.turnIndex += 1
     self.roundIndex = 0
 
-  def takeAction(self, player):
-    if self.tryBuild(player):
-      return
-    if self.tryUpgrade(player):
-      return
-    if self.tryInvestment(player):
-      return
-    if self.tryGetRevenues(player):
-      return
-    if self.tryBank(player):
-      return
-    self.actionsOfRound.append({
-      'action': 'other',
-      'player': player.initialIndex
-    })
 
   def advanceOnFirmTrack(self, player, firm, count):
     orderBefore = self.board.playerOrderOnFirmTrack(firm)
@@ -186,113 +171,85 @@ class GameController:
   def actionGetCard(self, player, cardIndex):
     card = self.board.getCardByIndex(cardIndex)
     goods = self.board.goodsOfCardByIndex(cardIndex)
+    self.board.removeCardByIndex(cardIndex)
     player.addCard(card)
     if goods:
-      self.advanceOnFirmTrack(player, firm, resources.mainFirm(goods), 1)
+      self.advanceOnFirmTrack(player, resources.mainFirm(goods), 1)
     if card.type == CardTypes.Loan:
       self.board.advanceConfidenceMarker(_confidenceLossPerLoan)
       player.amount += card.value
-
-  def actionGetCard(self, player, cardIndex):
-    card = self.board.getCardByIndex(cardIndex)
-    goods = self.board.goodsOfCardByIndex(cardIndex)
-    player.addCard(card)
-    if goods:
-      self.advanceOnFirmTrack(player, firm, resources.mainFirm(goods), 1)
-    if card.type == CardTypes.Loan:
-      self.board.advanceConfidenceMarker(_confidenceLossPerLoan)
-      player.amount += card.value
-
-  def expectedRevenueFromFirms(self):
-    return sum([self.board.revenues[i] for i in Firms]) / 6
-
-  def tryBank(self, player):
-    if (self.board.bank and
-        self.board.bank[-1] >= self.expectedRevenueFromFirms()):
-      amount = self.board.bank.pop()
-      player.amount += amount
-      self.actionsOfRound.append({
-        'action': 'bank',
-        'player': player.initialIndex,
-        'amount': amount
+    self.actionsOfRound.append({
+        'action': 'getCard',
+        'player': player.ident,
+        'card': card,
+        'advanceOnGoods': goods
       })
-      return True
-    return False
 
-  def tryUpgrade(self, player):
-    if self.board.upgrades:
-      card = self.board.upgrades.pop()
-      player.addCard(card)
-      self.actionsOfRound.append({
-        'action': 'upgrade',
-        'player': player.initialIndex,
-        'card': copy.copy(card)
+  def actionGetMoneyOnGoods(self, player, goods):
+    if goods not in Goods:
+      raise RuntimeError('Getting money on something that\'s not a goods.')
+    given = -(-self.board.revenues[goods] / 2)  # Trick to get ceil.
+    player.amount += given
+    self.board.revenues[goods] -= given
+    self.advanceOnFirmTrack(player, resources.mainFirm(goods), 1)
+    self.actionsOfRound.append({
+        'action': 'getMoneyOnGoods',
+        'player': player.ident,
+        'goods': goods,
+        'amount': given
       })
-      return True
-    return False
 
-  def tryInvestment(self, player):
-    if self.board.investments:
-      card = self.board.investments.pop()
-      player.addCard(card)
-      self.actionsOfRound.append({
-        'action': 'investment',
-        'player': player.initialIndex,
-        'card': copy.copy(card)
+  def actionInvest(self, player, circleIndex, firms):
+    counts = self.board.investmentActionCircles[circleIndex]['counts']
+    if len(counts) != len(firms):
+      raise RuntimeError('Action invest specified ' + str(len(firms)) +
+          ' firms, but the circle involves ' + str(len(counts)) + ' firms.')
+    self.board.putPlayerOnInvestmentCircle(player, circleIndex)
+    for firm, count in zip(firms, counts):
+      self.advanceOnFirmTrack(player, firm, count)
+    self.actionsOfRound.append({
+        'action': 'invest',
+        'player': player.ident,
+        'firms': firms,
+        'counts': counts
       })
-      return True
-    return False
 
-  def tryGetRevenues(self, player):
-    threshold = self.expectedRevenueFromFirms()
-    if self.board.bank:
-      threshold = max(threshold, self.board.bank[-1])
-    for i in Goods:
-      if (self.board.revenues[i] - (self.board.revenues[i] / 2) >= threshold):
-        amountLeft = self.board.revenues[i] / 2
-        amount = self.board.revenues[i] - amountLeft
-        player.amount += amount
-        self.board.revenues[i] = amountLeft
-        self.actionsOfRound.append({
-          'action': 'revenue',
-          'player': player.initialIndex,
-          'amount': amount
-        })
-        return True
-    return False
+  def actionBuild(self, player, firm):
+    self.board.buildForFirm(player, firm)
+    self.actionsOfRound.append({
+        'action': 'build',
+        'player': player.ident,
+        'firm': firm
+      })
 
-  def tryBuild(self, player):
-    for firm in Firms:
-      buildingStack = self.board.buildingStack[firm]
-      if player.canPayForBuilding(buildingStack):
-        player.payForBuilding(buildingStack)
-        level = buildingStack.cardColumn.getLevel()
-        amount = level * buildingStack.cardColumn.length()
-        amountSink = 0
-        for i in xrange(buildingStack.cardColumn.length()):
-          resource = buildingStack.cardColumn.getCard(i).resource
-          if resource != Resources.Bank:
-            self.board.revenues[resource] += level
-          else:
-            amountSink += level
-        self.board.shareValue[firm] += \
-            buildingStack.roof.progress if buildingStack.roof else 10
-        player.addCard(buildingStack.cardColumn.popLargest().flip())
-        player.addCard(ShareCard(buildingStack.roof.level - 1, firm))
-        if self.board.roofStack:
-          buildingStack.setRoof(self.board.roofStack.pop())
-        else:
-          buildingStack.clear()
-        self.actionsOfRound.append({
-          'action': 'build',
-          'player': player.initialIndex,
-          'firm': firm,
-          'amount': amount,
-          'amountSink': amountSink
-        })
-        return True
-    return False
+  def actionSellShare(self, player, card):
+    if card.name != 'share':
+      raise RuntimeError('Trying to sell not a share card ' + cardToJson(card))
+    if card not in player.cards:
+      raise RuntimeError('Trying to sell a card the player doesn\'t hold '
+          + cardToJson(card))
+    shareValue = self.board.getShareValue(card.firm)
+    player.amount += card.multiplicity * shareValue
+    player.cards.remove(card)
+    self.board.advanceConfidenceMarker(_confidenceLossPerSale)
+    self.actionsOfRound.append({
+        'action': 'sellShare',
+        'player': player.ident,
+        'card': card,
+        'shareValue': shareValue
+      })
 
+  def actionPayLoan(self, player, card):
+    if card.name != 'loan':
+      raise RuntimeError('Trying to pay not a loan card ' + cardToJson(card))
+    if card not in player.cards:
+      raise RuntimeError('Trying to pay a loan the player doesn\'t hold '
+          + cardToJson(card))
+    if player.amount < card.value:
+      raise RuntimeError('Not enough money (' + str(player.amount) + ') ' +
+          'to pay back loan: ' + cardToJson(card))
+    player.amount -= card.value
+    player.cards.remove(card)
 
 class BoardControllerTests(unittest.TestCase):
   def testInitialSetup(self):
@@ -321,240 +278,6 @@ class BoardControllerTests(unittest.TestCase):
     gc.turnIndex = 5
     gc.prepareTurn()
     self.assertEqual([5] * 4, [player.numActions for player in gc.players])
-
-  # def testBankAction(self):
-  #   b = Board()
-  #   gc = GameController(b)
-  #   gc.prepareTurn()
-  #   for player in gc.players:
-  #     player.amount = 0
-  #   # Doctor the board.
-  #   b.bank = [2, 4, 6]
-  #   for i in Firms:
-  #     b.revenues[i] = 10  # Expect 5 from a "no action"
-  #   self.assertTrue(gc.tryBank(gc.players[0]))
-  #   self.assertFalse(gc.tryBank(gc.players[1]))  # Prefers the expected 5.
-  #   for i in Firms:
-  #     b.revenues[i] = 0  # Expect 0 from a "no action"
-  #   self.assertTrue(gc.tryBank(gc.players[1]))
-  #   self.assertTrue(gc.tryBank(gc.players[2]))
-  #   self.assertFalse(gc.tryBank(gc.players[3]))
-  #   self.assertEqual(6, gc.players[0].amount)
-  #   self.assertEqual(4, gc.players[1].amount)
-  #   self.assertEqual(2, gc.players[2].amount)
-  #   self.assertEqual([
-  #     {'action': 'bank', 'player': 0, 'amount': 6},
-  #     {'action': 'bank', 'player': 1, 'amount': 4},
-  #     {'action': 'bank', 'player': 2, 'amount': 2}
-  #   ], gc.actionsOfRound)
-
-
-  # def testGetRevenuesAction(self):
-  #   b = Board()
-  #   gc = GameController(b)
-  #   for player in gc.players:
-  #     player.amount = 0
-  #   gc.prepareTurn()
-  #   # Doctor the board.
-  #   b.bank = [2, 4, 6]
-  #   for i in Firms:
-  #     b.revenues[i] = 20  # Expect 10 from a "no action"
-  #   b.revenues[Resources.Glass] = 11
-  #   b.revenues[Resources.Iron] = 10
-  #   b.revenues[Resources.Brick] = 9
-  #   self.assertFalse(gc.tryGetRevenues(gc.players[0]))
-  #   for i in Firms:
-  #     b.revenues[i] = 0  # Expect 6 from a "no action" (the bank)
-  #   self.assertTrue(gc.tryGetRevenues(gc.players[0]))
-  #   self.assertEqual(6, gc.players[0].amount)
-  #   self.assertEqual(5, b.revenues[Resources.Glass])
-  #   self.assertFalse(gc.tryGetRevenues(gc.players[1]))  # Prefers 6 from bank.
-  #   b.bank = [2, 4]
-  #   self.assertTrue(gc.tryGetRevenues(gc.players[1]))
-  #   self.assertEqual(5, gc.players[1].amount)
-  #   self.assertEqual(5, b.revenues[Resources.Iron])
-  #   self.assertTrue(gc.tryGetRevenues(gc.players[2]))
-  #   self.assertEqual(5, gc.players[2].amount)
-  #   self.assertEqual(4, b.revenues[Resources.Brick])
-
-  # def testUpgrade(self):
-  #   b = Board()
-  #   gc = GameController(b)
-  #   gc.prepareTurn()
-  #   for player in gc.players:
-  #     player.amount = 0
-  #   # Doctor the board a little.
-  #   b.upgrades = [
-  #     PlusLevelCard(2, Resources.Red),
-  #     UpgradeCard(3, Resources.Red),
-  #     UpgradeCard(1, Resources.Blue)
-  #   ]
-  #   self.assertTrue(gc.tryUpgrade(gc.players[0]))
-  #   self.assertTrue(gc.tryUpgrade(gc.players[0]))
-  #   self.assertTrue(gc.tryUpgrade(gc.players[0]))
-  #   self.assertFalse(gc.tryUpgrade(gc.players[0]))
-  #   self.assertEqual(4, gc.players[0].columns[Resources.Red].getLevel())
-  #   self.assertEqual(1, gc.players[0].columns[Resources.Blue].getLevel())
-  #   self.assertEqual([
-  #     {'action': 'upgrade',
-  #      'player': 0,
-  #      'card': UpgradeCard(1, Resources.Blue)},
-  #     {'action': 'upgrade',
-  #      'player': 0,
-  #      'card': UpgradeCard(3, Resources.Red)},
-  #     {'action': 'upgrade',
-  #      'player': 0,
-  #      'card': PlusLevelCard(2, Resources.Red)}
-  #   ], gc.actionsOfRound)
-
-  # def testUpgrade(self):
-  #   b = Board()
-  #   gc = GameController(b)
-  #   for player in gc.players:
-  #     player.amount = 0
-  #   gc.prepareTurn()
-  #   # Doctor the board a little.
-  #   b.investments = [
-  #     EquipmentCard(1, Resources.Red, Resources.Glass),
-  #     ShareCard(2, Resources.Green),
-  #     DividendCard(4, Resources.Green)
-  #   ]
-  #   self.assertTrue(gc.tryInvestment(gc.players[0]))
-  #   self.assertTrue(gc.tryInvestment(gc.players[0]))
-  #   self.assertTrue(gc.tryInvestment(gc.players[1]))
-  #   self.assertFalse(gc.tryInvestment(gc.players[2]))
-  #   self.assertEqual(1, gc.players[1].columns[Resources.Red].getLevel())
-  #   self.assertEqual(4, gc.players[0].columns[Resources.Green].getLevel())
-  #   self.assertEqual([
-  #     {'action': 'investment',
-  #      'player': 0,
-  #      'card': DividendCard(4, Resources.Green)},
-  #     {'action': 'investment',
-  #      'player': 0,
-  #      'card': ShareCard(2, Resources.Green)},
-  #     {'action': 'investment',
-  #      'player': 1,
-  #      'card': EquipmentCard(1, Resources.Red, Resources.Glass)}
-  #   ], gc.actionsOfRound)
-
-  # def testBuild(self):
-  #   b = Board()
-  #   gc = GameController(b)
-  #   for player in gc.players:
-  #     player.amount = 0
-  #   gc.prepareTurn()
-  #   # Doctor the board a little.
-  #   # Set the roof stack to be used for the future building
-  #   b.roofStack = [ RoofCard(2), RoofCard(4) ]
-  #   firm = Resources.Red
-  #   b.buildingStack[firm] = BuildingColumn(firm, [
-  #     BuildingCard(20, firm, Resources.Bank),
-  #     BuildingCard(20, firm, Resources.Bank),
-  #     BuildingCard(6, firm, Resources.Bank),  # Third building
-  #     BuildingCard(5, firm, Resources.Bank),  # Third building
-  #     BuildingCard(2, firm, Resources.Iron),  # First/Third building
-  #     BuildingCard(3, firm, Resources.Red),   # First/Third building
-  #     BuildingCard(4, firm, Resources.Glass)  # First building
-  #   ])
-  #   b.buildingStack[firm].setRoof(RoofCard(3))
-  #   firm = Resources.Green
-  #   b.buildingStack[firm] = BuildingColumn(firm, [
-  #     BuildingCard(20, firm, Resources.Bank),
-  #     BuildingCard(2, firm, Resources.Glass),  # Second building
-  #     BuildingCard(7, firm, Resources.Glass)  # Second building
-  #   ])
-  #   b.buildingStack[firm].setRoof(RoofCard(2))
-  #   # Have an empty building in the mix, that can never be built.
-  #   firm = Resources.Blue
-  #   b.buildingStack[firm] = BuildingColumn(firm, [])
-  #   for resource in FirmsOrGoods:
-  #     b.revenues[resource] = 0
-
-  #   # Have player 0 try and fail and then succeed to build the first building.
-  #   gc.players[0].addCard(EquipmentCard(3, Resources.Red, Resources.Glass, 6))
-  #   gc.players[0].amount = 7
-  #   self.assertFalse(gc.tryBuild(gc.players[0]))
-  #   gc.players[0].amount = 8
-  #   self.assertTrue(gc.tryBuild(gc.players[0]))
-
-  #   # Check player 0's red column.
-  #   self.assertEqual(3, gc.players[0].columns[Resources.Red].getLevel())
-  #   cards = gc.players[0].columns[Resources.Red].getCards()
-  #   self.assertIn(ShareCard(1, Resources.Red, 2), cards)
-  #   self.assertIn(ShareCard(2, Resources.Red), cards)
-
-  #   # Check the revenue areas.
-  #   self.assertEqual(4, b.revenues[Resources.Red])
-  #   self.assertEqual(4, b.revenues[Resources.Iron])
-  #   self.assertEqual(4, b.revenues[Resources.Glass])
-  #   for resource in FirmsOrGoods:
-  #     b.revenues[resource] = 0
-
-  #   # Check share value.
-  #   self.assertEqual(3, b.shareValue[Resources.Red])
-
-  #   # Have player 0 try and fail and then succeed to build the second building.
-  #   gc.players[0].amount = 11
-  #   self.assertFalse(gc.tryBuild(gc.players[0]))
-  #   gc.players[0].amount = 12
-  #   self.assertTrue(gc.tryBuild(gc.players[0]))
-
-  #   # Check player 0's green column.
-  #   self.assertEqual(1, gc.players[0].columns[Resources.Green].getLevel())
-  #   cards = gc.players[0].columns[Resources.Green].getCards()
-  #   self.assertIn(ShareCard(1, Resources.Green, 4), cards)
-  #   self.assertIn(ShareCard(1, Resources.Green), cards)
-
-  #   # Check the revenue areas.
-  #   self.assertEqual(14, b.revenues[Resources.Glass])
-  #   for resource in FirmsOrGoods:
-  #     b.revenues[resource] = 0
-
-  #   # Check share value.
-  #   self.assertEqual(2, b.shareValue[Resources.Green])
-
-  #   # Have player 1 build the third building.
-  #   gc.players[1].amount = 23
-  #   self.assertFalse(gc.tryBuild(gc.players[1]))
-  #   gc.players[1].amount = 24
-  #   self.assertTrue(gc.tryBuild(gc.players[1]))
-
-  #   # Check player 1's red column.
-  #   self.assertEqual(3, gc.players[1].columns[Resources.Red].getLevel())
-  #   cards = gc.players[1].columns[Resources.Red].getCards()
-  #   self.assertIn(ShareCard(1, Resources.Red, 3), cards)
-  #   self.assertIn(ShareCard(3, Resources.Red), cards)
-
-  #   # Check the revenue areas.
-  #   self.assertEqual(6, b.revenues[Resources.Red])
-  #   self.assertEqual(6, b.revenues[Resources.Iron])
-  #   for resource in FirmsOrGoods:
-  #     b.revenues[resource] = 0
-
-  #   # Check that the column card is cleared (no more roof card).
-  #   self.assertEqual(0, b.buildingStack[Resources.Red].cardColumn.length())
-  #   self.assertIsNone(b.buildingStack[Resources.Red].roof)
-
-  #   # Check share value. (3 + 4)
-  #   self.assertEqual(7, b.shareValue[Resources.Red])
-
-  #   self.assertEqual([
-  #     {'action': 'build',
-  #      'player': 0,
-  #      'firm': Resources.Red,
-  #      'amount': 12,
-  #      'amountSink': 0},
-  #     {'action': 'build',
-  #      'player': 0,
-  #      'firm': Resources.Green,
-  #      'amount': 14,
-  #      'amountSink': 0},
-  #     {'action': 'build',
-  #      'player': 1,
-  #      'firm': Resources.Red,
-  #      'amount': 24,
-  #      'amountSink': 12},
-  #   ], gc.actionsOfRound)
 
   def testAdvanceOnFirmTrack(self):
     b = Board()
@@ -603,9 +326,9 @@ class BoardControllerTests(unittest.TestCase):
       Resources.Brick: 44,
       Resources.Glass: 5
     }
-    b.buildingStack[Resources.Red].setRoof(RoofCard(4, 4))
-    b.buildingStack[Resources.Green].setRoof(RoofCard(2, 1))
-    b.buildingStack[Resources.Blue].setRoof(FinalRoofCard(5))
+    b.buildingColumn[Resources.Red].setRoof(RoofCard(4, 4))
+    b.buildingColumn[Resources.Green].setRoof(RoofCard(2, 1))
+    b.buildingColumn[Resources.Blue].setRoof(FinalRoofCard(5))
 
     b.advanceConfidenceMarker(14)  # Go to interests = 2$
     confidenceMarkerBefore = b.confidenceMarker
@@ -712,6 +435,182 @@ class BoardControllerTests(unittest.TestCase):
     players = gc.identsToPlayers([3, 0, 2, 1])
     self.assertEqual(expected, players)
     self.assertEqual([], gc.identsToPlayers([]))
+
+  def testActionGetCard(self):
+    b = Board()
+    gc = GameController(b)
+    confidenceMarkerBefore = b.confidenceMarker
+    # Doctor the board a little.
+    for player in gc.players:
+      player.amount = 0
+    b.cardStack = [
+      FactoryCard(Resources.Glass, 0, 1),
+      WorkforceCard(0, 1),
+      PlusLevelCard(1, 2),
+      GoodsCard(Resources.Iron, 3, 0),
+      MoneyForLevelCard(3, 3, 0),
+      WorkforceCard(0, 1),
+      ActionCard(),
+      UpgradeCard(2),
+      LoanCard(10, 1, 2),
+      LoanCard(8, 1, 2),
+      GoodsCard(Resources.Brick, 4, 0)]
+    b.prepareTurn()
+
+    p0, p1, p2, p3 = gc.players
+
+    gc.actionGetCard(p0, 2)  # Advances p0 on blue firm track.
+    self.assertIn(PlusLevelCard(1,2), p0.cards)
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+
+    gc.actionGetCard(p1, 2)  # Does not advance on any track.
+    self.assertIn(GoodsCard(Resources.Iron, 3, 0), p1.cards)
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+
+    gc.actionGetCard(p2, 0) # Advances p2 on red firm track.
+    self.assertIn(FactoryCard(Resources.Glass, 0, 1), p2.cards)
+    self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+
+    self.assertEqual(confidenceMarkerBefore, b.confidenceMarker)
+    gc.actionGetCard(p3, 5) # Does not advance on any track.
+    self.assertIn(LoanCard(10, 1, 2), p3.cards)
+    self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+    self.assertEqual(confidenceMarkerBefore - _confidenceLossPerLoan,
+        b.confidenceMarker)
+
+  def testActionGetMoneyOnGoods(self):
+    b = Board()
+    gc = GameController(b)
+    # Doctor the board a little.
+    for player in gc.players:
+      player.amount = 0
+    b.revenues[Resources.Glass] = 13
+
+    p0, p1, p2, p3 = gc.players
+
+    gc.actionGetMoneyOnGoods(p1, Resources.Glass)
+    self.assertEqual(7, p1.amount)
+    self.assertEqual(6, b.revenues[Resources.Glass])
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([1], b.playerOrderOnFirmTrack(Resources.Blue))
+
+  def testActionInvest(self):
+    b = Board()
+    gc = GameController(b)
+
+    p0, p1, p2, p3 = gc.players
+
+    gc.actionInvest(p0, 0, [Resources.Red, Resources.Blue])   # p0: +1 R, +1 B
+    with self.assertRaises(RuntimeError):
+      gc.actionInvest(p1, 0, [Resources.Red, Resources.Blue])
+    gc.actionInvest(p2, 1, [Resources.Green])                 # p2: +2 G
+    with self.assertRaises(RuntimeError):
+      gc.actionInvest(p2, 2, [Resources.Red, Resources.Blue])
+    gc.actionInvest(p0, 2, [Resources.Red])                   # p0: +3 R
+    with self.assertRaises(RuntimeError):
+      gc.actionInvest(p2, 3, [Resources.Green])
+    gc.actionInvest(p3, 3, [Resources.Red, Resources.Blue])   # p3: +2 R, +2 B
+    gc.actionInvest(p2, 4, [Resources.Red])                   # p2: +4 R
+    self.assertEqual([[], [3], [], [0, 2]], b.firmTracks[Resources.Red][:4])
+    self.assertEqual([[], [2], [], []], b.firmTracks[Resources.Green][:4])
+    self.assertEqual([[0], [3], [], []], b.firmTracks[Resources.Blue][:4])
+
+    gc.finalizeTurn()
+    # Check order
+    self.assertEqual([0, 2, 3, 1], [p.ident for p in gc.players])
+
+  def testActionBuild(self):
+    b = Board()
+    gc = GameController(b)
+
+    p0, p1, p2, p3 = gc.players
+    # Doctor the board
+    for resource in FirmsOrGoods:
+      b.revenues[resource] = 0
+    column = BuildingColumn(Resources.Red, [
+        BuildingCard(5, Resources.Red, Resources.Glass),
+        BuildingCard(6, Resources.Red, Resources.Iron),
+        BuildingCard(5, Resources.Red, Resources.Glass),
+        BuildingCard(2, Resources.Red, Resources.Bank),
+        BuildingCard(3, Resources.Red, Resources.Red),
+        BuildingCard(3, Resources.Red, Resources.Red),
+        ])
+    b.buildingColumn[Resources.Red] = column
+    b.roofStack = [RoofCard(5, 6)]
+    column.setRoof(RoofCard(4, 3))
+
+    p2.amount = 20
+    gc.actionBuild(p2, Resources.Red)
+
+    self.assertEqual(0, p2.amount)
+    self.assertEqual(4, p2.getLevel())
+    self.assertIn(ShareCard(Resources.Red, 3), p2.cards)
+    self.assertEqual(10, b.revenues[Resources.Red])
+    self.assertEqual(5, b.revenues[Resources.Glass])
+    self.assertEqual(3, b.shareScore[Resources.Red])
+    self.assertEqual(5, column.length())
+    self.assertEqual(6, column.getLevel())
+
+  def testActionSellShare(self):
+    b = Board()
+    gc = GameController(b)
+
+    # Doctor the board
+    b.advanceShareScore(Resources.Green, 18)  # Share value = 5$
+
+    confidenceMarkerBefore = b.confidenceMarker
+    p0, p1, p2, p3 = gc.players
+    p0.amount = 0
+    p0.addCard(ShareCard(Resources.Green, 3))
+    p0.addCard(ActionCard())
+    gc.actionSellShare(p0, ShareCard(Resources.Green, 3))  # 3 * 5$
+
+    self.assertEqual(15, p0.amount)
+    self.assertNotIn(ShareCard(Resources.Green, 3), p0.cards)
+    self.assertEqual(confidenceMarkerBefore - _confidenceLossPerSale,
+        b.confidenceMarker)
+
+    with self.assertRaises(RuntimeError):
+      gc.actionSellShare(p0, ShareCard(Resources.Green, 3))
+
+    with self.assertRaises(RuntimeError):
+      gc.actionSellShare(p0, ActionCard())
+
+  def testActionPayLoan(self):
+    b = Board()
+    gc = GameController(b)
+
+    p0, p1, p2, p3 = gc.players
+    p2.amount = 10
+    p2.addCard(LoanCard(8, 2, 2))
+    p2.addCard(LoanCard(6, 1, 2))
+    gc.actionPayLoan(p2, LoanCard(8, 2, 2))
+
+    self.assertEqual(2, p2.amount)
+    self.assertNotIn(LoanCard(8, 2, 2), p2.cards)
+
+    with self.assertRaises(RuntimeError):
+      gc.actionPayLoan(p2, LoanCard(6, 1, 2))
+
+    p2.amount = 6
+    gc.actionPayLoan(p2, LoanCard(6, 1, 2))
+    self.assertEqual(0, p2.amount)
+    self.assertNotIn(LoanCard(6, 1, 2), p2.cards)
+
+    with self.assertRaises(RuntimeError):
+      gc.actionPayLoan(p0, LoanCard(6, 1, 2))
+
+    with self.assertRaises(RuntimeError):
+      gc.actionPayLoan(p0, EmergencyLoanCard(1, 2))
 
 def main():
     unittest.main()

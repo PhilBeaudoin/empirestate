@@ -10,12 +10,27 @@ from player import Player
 
 _firmTrackTrigger = 6
 _firmTrackLength = 10
+_shareValueBracket = [
+  4,   # 4 and -  ==> 0$
+  8,   # 8 and -  ==> 1$
+  11,  #          ==> 2$
+  14,  #          ==> 3$
+  17,  #          ==> 4$
+  19,  #          ==> 5$
+  21,  #          ==> 6$
+  23,  #          ==> 7$
+  25,  #          ==> 8$
+  28,  #          ==> 9$
+  31,  #          ==> 10$
+  34,  #          ==> 11$
+       # 35 and + ==> 12$
+]
 _interestsBracket = [
   35,  #  35 and +  ==> 0$
   30,  #  30 and +  ==> 1$
   25,  #  25 and +  ==> 2$
   20,  #  20 and +  ==> 3$
-       #  0  and +  ==> 4$
+       #  19 and -  ==> 4$
 ]
 
 def cardsA():
@@ -155,18 +170,18 @@ class Board:
       Resources.Blue: BonusEquipmentCard(1)
     }
     self.investmentActionCircles = [
-      { 'bonuses': [1, 1], 'playerId': None },
-      { 'bonuses': [2], 'playerId': None },
-      { 'bonuses': [3], 'playerId': None },
-      { 'bonuses': [2, 2], 'playerId': None },
-      { 'bonuses': [4], 'playerId': None },
+      { 'counts': [1, 1], 'playerId': None },
+      { 'counts': [2], 'playerId': None },
+      { 'counts': [3], 'playerId': None },
+      { 'counts': [2, 2], 'playerId': None },
+      { 'counts': [4], 'playerId': None },
     ]
     self.confidenceMarker = 40
-    self.shareValue = {firm: 0 for firm in Firms}
-    self.buildingStack = {}
+    self.shareScore = {firm: 0 for firm in Firms}
+    self.buildingColumn = {}
     for firm in Firms:
-      self.buildingStack[firm] = BuildingColumn(firm, initialBuildings(firm))
-      self.buildingStack[firm].setRoof(self.roofStack.pop())
+      self.buildingColumn[firm] = BuildingColumn(firm, initialBuildings(firm))
+      self.buildingColumn[firm].setRoof(self.roofStack.pop())
     A = list(cardsA())
     B = list(cardsB())
     C = list(cardsC())
@@ -238,22 +253,42 @@ class Board:
         currentOrderIdents.insert(0, playerId)
     return currentOrderIdents
 
-  def advanceShareValue(self, firm, count):
-    self.shareValue[firm] = min(self.shareValue[firm] + count,
+  def advanceShareScore(self, firm, count):
+    self.shareScore[firm] = min(self.shareScore[firm] + count,
         self.confidenceMarker - 1)
 
   def advanceConfidenceMarker(self, count):
     self.confidenceMarker = max(1, self.confidenceMarker - count)
     for firm in Firms:
-      while (self.shareValue[firm] >= self.confidenceMarker):
-        self.shareValue[firm] = max(0,
-            self.shareValue[firm] - self.buildingStack[firm].getProgress())
+      while (self.shareScore[firm] >= self.confidenceMarker):
+        self.shareScore[firm] = max(0,
+            self.shareScore[firm] - self.buildingColumn[firm].getProgress())
+
+  def getShareValue(self, firm):
+    for value, bound in enumerate(_shareValueBracket):
+      if self.shareScore[firm] <= bound:
+        return value
+    return len(_shareValueBracket)
 
   def getInterests(self):
     for value, bound in enumerate(_interestsBracket):
       if self.confidenceMarker >= bound:
         return value
     return len(_interestsBracket)
+
+  def buildForFirm(self, player, firm):
+    if not self.roofStack:
+      raise RuntimeError('Cannot build firm: no more roof card left.')
+    column = self.buildingColumn[firm]
+    payments = player.payForBuilding(column)
+    for resource in FirmsOrGoods:
+      self.revenues[resource] += payments[resource]
+    buildingCard = column.popLargest()
+    roofCard = column.roof
+    self.advanceShareScore(firm, roofCard.progress)
+    player.addCard(buildingCard.flip())
+    player.setLevelCard(roofCard.flip())
+    column.setRoof(self.roofStack.pop())
 
 class BoardTests(unittest.TestCase):
   def testInitialSetup(self):
@@ -262,12 +297,12 @@ class BoardTests(unittest.TestCase):
     seed(10)
     for i in xrange(100):
       b = Board()
-      self.assertEqual(2, b.buildingStack[Resources.Red].cardColumn.length())
-      self.assertEqual(2, b.buildingStack[Resources.Green].cardColumn.length())
-      self.assertEqual(2, b.buildingStack[Resources.Blue].cardColumn.length())
-      self.assertEqual(2, b.buildingStack[Resources.Red].roof.cardCount)
-      self.assertEqual(2, b.buildingStack[Resources.Green].roof.cardCount)
-      self.assertEqual(2, b.buildingStack[Resources.Blue].roof.cardCount)
+      self.assertEqual(2, b.buildingColumn[Resources.Red].cardColumn.length())
+      self.assertEqual(2, b.buildingColumn[Resources.Green].cardColumn.length())
+      self.assertEqual(2, b.buildingColumn[Resources.Blue].cardColumn.length())
+      self.assertEqual(2, b.buildingColumn[Resources.Red].roof.cardCount)
+      self.assertEqual(2, b.buildingColumn[Resources.Green].roof.cardCount)
+      self.assertEqual(2, b.buildingColumn[Resources.Blue].roof.cardCount)
       self.assertEqual(66, len(b.cardStack))
       self.assertEqual(0, b.revenues[Resources.Red])
       self.assertEqual(0, b.revenues[Resources.Green])
@@ -348,45 +383,45 @@ class BoardTests(unittest.TestCase):
     b.advancePlayerOnFirmTrack(p0, Resources.Red, 100)
     self.assertTrue(b.isFirmTrackTriggering(Resources.Red))
 
-  def testChangeShareValue(self):
+  def testChangeShareScore(self):
     b = Board()
     # Doctor the board
-    b.buildingStack[Resources.Red] = BuildingColumn(Resources.Red, [
+    b.buildingColumn[Resources.Red] = BuildingColumn(Resources.Red, [
         BuildingCard(2, Resources.Red, Resources.Bank)])
-    b.buildingStack[Resources.Red].setRoof(RoofCard(1, 8))
-    b.buildingStack[Resources.Green] = BuildingColumn(Resources.Green, [
+    b.buildingColumn[Resources.Red].setRoof(RoofCard(1, 8))
+    b.buildingColumn[Resources.Green] = BuildingColumn(Resources.Green, [
         BuildingCard(2, Resources.Green, Resources.Bank)])
-    b.buildingStack[Resources.Green].setRoof(RoofCard(1, 9))
-    b.buildingStack[Resources.Blue] = BuildingColumn(Resources.Blue, [
+    b.buildingColumn[Resources.Green].setRoof(RoofCard(1, 9))
+    b.buildingColumn[Resources.Blue] = BuildingColumn(Resources.Blue, [
         BuildingCard(2, Resources.Blue, Resources.Bank)])
-    b.buildingStack[Resources.Blue].setRoof(RoofCard(1, 3))
+    b.buildingColumn[Resources.Blue].setRoof(RoofCard(1, 3))
     b.confidenceMarker = 20
-    self.assertEqual(0, b.shareValue[Resources.Red])
-    b.advanceShareValue(Resources.Red, 5)
-    self.assertEqual(5, b.shareValue[Resources.Red])
-    b.advanceShareValue(Resources.Red, 8)
-    self.assertEqual(13, b.shareValue[Resources.Red])
-    b.advanceShareValue(Resources.Red, 10)
-    self.assertEqual(19, b.shareValue[Resources.Red])
-    b.advanceShareValue(Resources.Green, 20)
-    self.assertEqual(19, b.shareValue[Resources.Green])
-    b.advanceShareValue(Resources.Blue, 18)
-    self.assertEqual(18, b.shareValue[Resources.Blue])
+    self.assertEqual(0, b.shareScore[Resources.Red])
+    b.advanceShareScore(Resources.Red, 5)
+    self.assertEqual(5, b.shareScore[Resources.Red])
+    b.advanceShareScore(Resources.Red, 8)
+    self.assertEqual(13, b.shareScore[Resources.Red])
+    b.advanceShareScore(Resources.Red, 10)
+    self.assertEqual(19, b.shareScore[Resources.Red])
+    b.advanceShareScore(Resources.Green, 20)
+    self.assertEqual(19, b.shareScore[Resources.Green])
+    b.advanceShareScore(Resources.Blue, 18)
+    self.assertEqual(18, b.shareScore[Resources.Blue])
     b.advanceConfidenceMarker(1)
     self.assertEqual(19, b.confidenceMarker)
-    self.assertEqual(11, b.shareValue[Resources.Red])
-    self.assertEqual(10, b.shareValue[Resources.Green])
-    self.assertEqual(18, b.shareValue[Resources.Blue])
+    self.assertEqual(11, b.shareScore[Resources.Red])
+    self.assertEqual(10, b.shareScore[Resources.Green])
+    self.assertEqual(18, b.shareScore[Resources.Blue])
     b.advanceConfidenceMarker(5)
     self.assertEqual(14, b.confidenceMarker)
-    self.assertEqual(11, b.shareValue[Resources.Red])
-    self.assertEqual(10, b.shareValue[Resources.Green])
-    self.assertEqual(12, b.shareValue[Resources.Blue])
+    self.assertEqual(11, b.shareScore[Resources.Red])
+    self.assertEqual(10, b.shareScore[Resources.Green])
+    self.assertEqual(12, b.shareScore[Resources.Blue])
     b.advanceConfidenceMarker(40)
     self.assertEqual(1, b.confidenceMarker)
-    self.assertEqual(0, b.shareValue[Resources.Red])
-    self.assertEqual(0, b.shareValue[Resources.Green])
-    self.assertEqual(0, b.shareValue[Resources.Blue])
+    self.assertEqual(0, b.shareScore[Resources.Red])
+    self.assertEqual(0, b.shareScore[Resources.Green])
+    self.assertEqual(0, b.shareScore[Resources.Blue])
 
   def testNewPlayerOrder(self):
     b = Board()
@@ -409,31 +444,53 @@ class BoardTests(unittest.TestCase):
     b.putPlayerOnInvestmentCircle(players[3], 4)
     self.assertEqual([3, 0, 1, 2], b.getNewPlayerOrder(players))
 
+  def testGetShareValue(self):
+    b = Board()
+    self.assertEqual(0, b.getShareValue(Resources.Red))
+    testCases = [(0, 0), (4, 0), (5, 1), (8, 1), (9, 2), (15, 4), (17, 4),
+                 (18, 5), (34, 11), (35, 12), (60, 12)]
+    for testCase in testCases:
+      b.shareScore[Resources.Red] = testCase[0]
+      self.assertEqual(testCase[1], b.getShareValue(Resources.Red))
+
   def testGetInterests(self):
     b = Board()
     self.assertEqual(0, b.getInterests())
-    b.confidenceMarker = 36
-    self.assertEqual(0, b.getInterests())
-    b.confidenceMarker = 35
-    self.assertEqual(0, b.getInterests())
-    b.confidenceMarker = 34
-    self.assertEqual(1, b.getInterests())
-    b.confidenceMarker = 30
-    self.assertEqual(1, b.getInterests())
-    b.confidenceMarker = 29
-    self.assertEqual(2, b.getInterests())
-    b.confidenceMarker = 25
-    self.assertEqual(2, b.getInterests())
-    b.confidenceMarker = 24
-    self.assertEqual(3, b.getInterests())
-    b.confidenceMarker = 22
-    self.assertEqual(3, b.getInterests())
-    b.confidenceMarker = 19
-    self.assertEqual(4, b.getInterests())
-    b.confidenceMarker = 19
-    self.assertEqual(4, b.getInterests())
-    b.confidenceMarker = 1
-    self.assertEqual(4, b.getInterests())
+    testCases = [(36, 0), (35, 0), (34, 1), (30, 1), (29, 2), (25, 2), (24, 3),
+                 (22, 3), (19, 4), (1, 4)]
+    for testCase in testCases:
+      b.confidenceMarker = testCase[0]
+      self.assertEqual(testCase[1], b.getInterests())
+
+  def testBuildForFirm(self):
+    b = Board()
+    p = Player()
+    # Doctor the board
+    for resource in FirmsOrGoods:
+      b.revenues[resource] = 0
+    column = BuildingColumn(Resources.Red, [
+        BuildingCard(5, Resources.Red, Resources.Glass),
+        BuildingCard(6, Resources.Red, Resources.Iron),
+        BuildingCard(5, Resources.Red, Resources.Glass),
+        BuildingCard(2, Resources.Red, Resources.Bank),
+        BuildingCard(3, Resources.Red, Resources.Red),
+        BuildingCard(3, Resources.Red, Resources.Red),
+        ])
+    b.buildingColumn[Resources.Red] = column
+    b.roofStack = [RoofCard(5, 6)]
+    column.setRoof(RoofCard(4, 3))
+
+    p.amount = 20
+    b.buildForFirm(p, Resources.Red)
+
+    self.assertEqual(0, p.amount)
+    self.assertEqual(4, p.getLevel())
+    self.assertIn(ShareCard(Resources.Red, 3), p.cards)
+    self.assertEqual(10, b.revenues[Resources.Red])
+    self.assertEqual(5, b.revenues[Resources.Glass])
+    self.assertEqual(3, b.shareScore[Resources.Red])
+    self.assertEqual(5, column.length())
+    self.assertEqual(6, column.getLevel())
 
 def main():
     unittest.main()

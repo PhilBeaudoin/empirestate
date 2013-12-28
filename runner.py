@@ -15,7 +15,7 @@ totalAmount = [[], [], [], [], [], []]
 numberOfBuilds = [[], [], [], [], [], []]
 numShares = [[], [], [], [], [], []]
 numShareSpread = [[], [], [], [], [], []]
-shareValues = [[], [], [], [], [], []]
+shareScores = [[], [], [], [], [], []]
 shareSpread = [[], [], [], [], [], []]
 buildingsComplete = [[], [], [], [], [], []]
 amountOnFirms = [[], [], [], [], [], []]
@@ -32,8 +32,8 @@ for stat in stats:
         numpy.mean(turnStat['numberOfSharePerPlayer']))
     numShareSpread[turnIndex].append(
         numpy.std(turnStat['numberOfSharePerPlayer']))
-    shareValues[turnIndex] += turnStat['shareValues'].values()
-    shareSpread[turnIndex].append(numpy.std(turnStat['shareValues'].values()))
+    shareScores[turnIndex] += turnStat['shareScores'].values()
+    shareSpread[turnIndex].append(numpy.std(turnStat['shareScores'].values()))
     buildingsComplete[turnIndex].append(turnStat['buildingsComplete'])
     amountOnFirms[turnIndex] += \
         [b for a, b in turnStat['amountOnResources'].items() if a in Firms]
@@ -65,8 +65,8 @@ histoNumShareSpread = [
   numpy.histogram(values, bins=20, range=(0,20)) for values in numShareSpread
 ]
 
-histoShareValues = [
-  numpy.histogram(values, bins=40, range=(0,40)) for values in shareValues
+histoShareScores = [
+  numpy.histogram(values, bins=40, range=(0,40)) for values in shareScores
 ]
 
 histoShareSpread = [
@@ -98,8 +98,8 @@ print 'histoNumOfShares'
 print histoNumOfShares
 print 'histoNumShareSpread'
 print histoNumShareSpread
-print 'histoShareValues'
-print histoShareValues
+print 'histoShareScores'
+print histoShareScores
 print 'histoShareSpread'
 print histoShareSpread
 print 'histoBuildingsComplete'
