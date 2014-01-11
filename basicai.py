@@ -6,74 +6,73 @@ from buildingcolumn import BuildingColumn
 from resources import Resources, Firms, Goods, FirmsOrGoods
 from cards import *
 import copy
+import sharevalues
 
 # For each turn, given the current share score, give the estimated final share
 # value
-finalShareScore = [
-  [25 for i in range(50)],
-  [20 + i/4 for i in range(50)],
-  [18 + i/3 for i in range(50)],
-  [15 + i/2 for i in range(50)],
-  [10 + 3*i/4 for i in range(50)],
-  [i for i in range(50)],
-]
+finalShareScore = sharevalues.final1
+maxShareScore = sharevalues.max1
 
 # For each turn, given the current confidence marker, give the confidence marker
 # level at turn j
 predictedConfidenceMarker = [
  [
-   [i for i in range(50)], # At turn 1, predicting for turn 1
-   [max(0, i - 3) for i in range(50)],
-   [max(0, i - 6) for i in range(50)],
-   [max(0, i - 9) for i in range(50)],
-   [max(0, i - 12) for i in range(50)],
-   [max(0, i - 15) for i in range(50)],
+   [i for i in range(60)], # At turn 1, predicting for turn 1
+   [max(0, i - 3) for i in range(60)],
+   [max(0, i - 6) for i in range(60)],
+   [max(0, i - 9) for i in range(60)],
+   [max(0, i - 12) for i in range(60)],
+   [max(0, i - 15) for i in range(60)],
  ],
  [
-   [i for i in range(50)], # At turn 2, predicting for turn 1
-   [i for i in range(50)], # At turn 2, predicting for turn 2
-   [max(0, i - 3) for i in range(50)],
-   [max(0, i - 6) for i in range(50)],
-   [max(0, i - 9) for i in range(50)],
-   [max(0, i - 12) for i in range(50)],
+   [i for i in range(60)], # At turn 2, predicting for turn 1
+   [i for i in range(60)], # At turn 2, predicting for turn 2
+   [max(0, i - 3) for i in range(60)],
+   [max(0, i - 6) for i in range(60)],
+   [max(0, i - 9) for i in range(60)],
+   [max(0, i - 12) for i in range(60)],
  ],
  [
-   [i for i in range(50)], # At turn 3, predicting for turn 1
-   [i for i in range(50)], # At turn 3, predicting for turn 2
-   [i for i in range(50)], # At turn 3, predicting for turn 3
-   [max(0, i - 3) for i in range(50)],
-   [max(0, i - 6) for i in range(50)],
-   [max(0, i - 9) for i in range(50)],
+   [i for i in range(60)], # At turn 3, predicting for turn 1
+   [i for i in range(60)], # At turn 3, predicting for turn 2
+   [i for i in range(60)], # At turn 3, predicting for turn 3
+   [max(0, i - 3) for i in range(60)],
+   [max(0, i - 6) for i in range(60)],
+   [max(0, i - 9) for i in range(60)],
  ],
  [
-   [i for i in range(50)], # At turn 4, predicting for turn 1
-   [i for i in range(50)], # At turn 4, predicting for turn 2
-   [i for i in range(50)], # At turn 4, predicting for turn 3
-   [i for i in range(50)], # At turn 4, predicting for turn 4
-   [max(0, i - 3) for i in range(50)],
-   [max(0, i - 6) for i in range(50)],
+   [i for i in range(60)], # At turn 4, predicting for turn 1
+   [i for i in range(60)], # At turn 4, predicting for turn 2
+   [i for i in range(60)], # At turn 4, predicting for turn 3
+   [i for i in range(60)], # At turn 4, predicting for turn 4
+   [max(0, i - 3) for i in range(60)],
+   [max(0, i - 6) for i in range(60)],
  ],
  [
-   [i for i in range(50)], # At turn 5, predicting for turn 1
-   [i for i in range(50)], # At turn 5, predicting for turn 2
-   [i for i in range(50)], # At turn 5, predicting for turn 3
-   [i for i in range(50)], # At turn 5, predicting for turn 4
-   [i for i in range(50)], # At turn 5, predicting for turn 5
-   [max(0, i - 3) for i in range(50)],
+   [i for i in range(60)], # At turn 5, predicting for turn 1
+   [i for i in range(60)], # At turn 5, predicting for turn 2
+   [i for i in range(60)], # At turn 5, predicting for turn 3
+   [i for i in range(60)], # At turn 5, predicting for turn 4
+   [i for i in range(60)], # At turn 5, predicting for turn 5
+   [max(0, i - 3) for i in range(60)],
  ],
  [
-   [i for i in range(50)], # At turn 6, predicting for turn 1
-   [i for i in range(50)], # At turn 6, predicting for turn 2
-   [i for i in range(50)], # At turn 6, predicting for turn 3
-   [i for i in range(50)], # At turn 6, predicting for turn 4
-   [i for i in range(50)], # At turn 6, predicting for turn 5
-   [i for i in range(50)], # At turn 6, predicting for turn 6
+   [i for i in range(60)], # At turn 6, predicting for turn 1
+   [i for i in range(60)], # At turn 6, predicting for turn 2
+   [i for i in range(60)], # At turn 6, predicting for turn 3
+   [i for i in range(60)], # At turn 6, predicting for turn 4
+   [i for i in range(60)], # At turn 6, predicting for turn 5
+   [i for i in range(60)], # At turn 6, predicting for turn 6
  ],
 ]
 
 class BasicAi:
-  def __init__(self, player):
+  def __init__(self, player, valuationRate = 1.1, loanMultiplier = 0.4,
+      goodsMultiplier = 0.7):
     self.player = player
+    self.valuationRate = valuationRate
+    self.loanMultiplier = loanMultiplier
+    self.goodsMultiplier = goodsMultiplier
 
   def takeAction(self, gameController):
     board = gameController.board
@@ -103,14 +102,14 @@ class BasicAi:
         bestMove['value'] = value
         bestMove['action'] = gameController.actionBuild
         bestMove['params'] = [firm]
-    for card in board.cardsAvailable:
+    for card in self.player.cards:
       if card.name == 'share':
         value = self.computeSellShareValue(gameController, card)
         if value > bestMove['value']:
           bestMove['value'] = value
           bestMove['action'] = gameController.actionSellShare
           bestMove['params'] = [card]
-    for card in board.cardsAvailable:
+    for card in self.player.cards:
       if card.name == 'loan':
         value = self.computePayLoanValue(gameController, card)
         if value > bestMove['value']:
@@ -127,7 +126,8 @@ class BasicAi:
   def computePayoffForCard(self, card, level):
     card = copy.copy(card)
     directPayoff = card.payoff(level, self.player.bonusCards)
-    return directPayoff + (card.amount * 0.7 if card.name == 'factory' else 0)
+    return directPayoff + \
+        (card.amount * self.goodsMultiplier if card.name == 'factory' else 0)
 
   def computeGetCardValue(self, gameController, cardIndex):
     turn = gameController.turnIndex
@@ -143,6 +143,7 @@ class BasicAi:
     valueForCard = 0
     level = self.player.getLevel()
     for i in range(turn, 6):
+      valueForCard *= self.valuationRate
       valueForCard += self.computePayoffForCard(card, level)
       level += 1
 
@@ -151,31 +152,29 @@ class BasicAi:
     for i in range(turn, 6):
       prediction = predictedConfidenceMarker[turn][i][confidenceMarker]
       interests = board.getInterestsForMarker(prediction)
+      costForUpkeep *= self.valuationRate
       costForUpkeep += card.upkeep * interests
 
     # TODO: That's a bit rough...
-    extraValue = 0
+    extraValue = card.finalPayoff
     if card.name == 'plusLevel':
-      extraValue = 2 * card.bonus * (6 - turn)
-    elif card.name == 'goods':
-      extraValue = card.amount
+      extraValue = 2 * card.plusLevel * (6 - turn)
+    elif card.name == 'loanGoods':
+      extraValue = card.amount * self.loanMultiplier * self.goodsMultiplier * \
+          pow(self.valuationRate, 6 - turn - 1)
     elif card.name == 'loan':
-      buildingValue = 0
-      for firm in Firms:
-        if not self.player.canPayForBuilding(board.buildingColumn[firm]):
-          self.player.amount += card.value
-          if self.player.canPayForBuilding(board.buildingColumn[firm]):
-            buildingValue = max(buildingValue,
-                                self.computeBuildingValue(gameController, firm))
-          self.player.amount -= card.value
-      extraValue = buildingValue * 0.7
+      extraValue = card.amount * self.loanMultiplier * \
+          pow(self.valuationRate, 6 - turn - 1)
 
     return valueToAdvanceOnFirmTrack + valueForCard + extraValue - costForUpkeep
 
   def computeGetMoneyOnGoodsValue(self, gameController, goods):
+    turn = gameController.turnIndex
     board = gameController.board
-    return -(-board.revenues[goods] / 2) + self.computeAdvanceOnFirmValue(
-        gameController, resources.mainFirm(goods), 1) + 0.1
+    return -(-board.revenues[goods] / 2) * \
+        pow(self.valuationRate, 6 - turn - 1) + \
+        self.computeAdvanceOnFirmValue(
+            gameController, resources.mainFirm(goods), 1) + 0.1
 
   def computeInvestValue(self, gameController, circleIndex, firms):
     board = gameController.board
@@ -199,15 +198,29 @@ class BasicAi:
     shareScore = board.shareScore[card.firm]
     currentValue = board.getShareValueForScore(shareScore)
     finalValue = board.getShareValueForScore(finalShareScore[turn][shareScore])
-    return card.multiplicity * (currentValue - finalValue)
+    return card.multiplicity * (currentValue - finalValue) * \
+        pow(self.valuationRate, 6 - turn - 1)
 
   def computePayLoanValue(self, gameController, card):
-    # TODO: For now, never repay loan. It's hard to evaluate the loss in
-    # liquidity.
-    return -1000
+    turn = gameController.turnIndex
+    board = gameController.board
+
+    if self.player.amount < -card.finalPayoff:
+      return -1000
+
+    costForUpkeep = 0
+    confidenceMarker = board.confidenceMarker
+    for i in range(turn, 6):
+      prediction = predictedConfidenceMarker[turn][i][confidenceMarker]
+      interests = board.getInterestsForMarker(prediction)
+      costForUpkeep += card.upkeep * interests
+
+    return costForUpkeep * pow(self.valuationRate, 6 - turn - 1)
 
   def computeSkipActionValue(self, gameController):
-    return gameController.amountToSkipAction
+    turn = gameController.turnIndex
+    return gameController.amountToSkipAction * \
+        pow(self.valuationRate, 6 - turn - 1)
 
   def computeBuildingValue(self, gameController, firm):
     turn = gameController.turnIndex
@@ -221,9 +234,9 @@ class BasicAi:
     newShareScore = oldShareScore + roofCard.progress
 
     oldShareValue = board.getShareValueForScore(
-        finalShareScore[turn][oldShareScore])
+        maxShareScore[turn][oldShareScore])
     newShareValue = board.getShareValueForScore(
-        finalShareScore[turn][newShareScore])
+        maxShareScore[turn][newShareScore])
 
     valueDiff = newShareValue - oldShareValue
     valueForOldShares = 0
@@ -242,14 +255,19 @@ class BasicAi:
         (0 if not self.player.levelCard else self.player.levelCard.level)
     for card in self.player.cards:
       payoffAfter += self.computePayoffForCard(card, newLevel)
-    valueForLevelIncrease = (payoffAfter - payoffBefore) * (6 - turn)
+    valueForLevelIncrease = (payoffAfter - payoffBefore)
+    for i in range(turn, 6):
+      valueForLevelIncrease *= self.valuationRate
+      valueForLevelIncrease += (payoffAfter - payoffBefore)
 
     # TODO: Factories shouldn't be counted in cost.
-    cost = buildingCard.level * roofCard.cardCount
+    cost = (buildingCard.level * roofCard.cardCount) * \
+        pow(self.valuationRate, 6 - turn - 1)
 
     return valueForOldShares + valueForNewShares + valueForLevelIncrease - cost
 
   def computeAdvanceOnFirmValue(self, gameController, firm, count):
+    turn = gameController.turnIndex
     board = gameController.board
     revenues = board.revenues[firm]
     orderBefore = board.playerOrderOnFirmTrack(firm)
@@ -280,7 +298,7 @@ class BasicAi:
         amountAfter = given
         break
     # TODO: Compute value of first position.
-    return amountAfter - amountBefore
+    return (amountAfter - amountBefore) * pow(self.valuationRate, 6 - turn - 1)
 
   def generateFirmTuples(self, n):
     if   n == 0: return []
@@ -311,8 +329,8 @@ class BasicAiTests(unittest.TestCase):
       WorkforceCard(0, 1),
       ActionCard(),
       UpgradeCard(2),
-      LoanCard(10, 1, 2),
-      LoanCard(8, 1, 2),
+      LoanCard(10, 1),
+      LoanCard(8, 1),
       GoodsCard(Resources.Brick, 4, 0)]
     b.prepareTurn()
     b.revenues[Resources.Red] = 2
@@ -345,10 +363,12 @@ class BasicAiTests(unittest.TestCase):
     self.assertEqual(totalLevel - interests, ai0.computeGetCardValue(gc, 5))
     self.assertEqual(0, ai0.computeGetCardValue(gc, 6))
     self.assertEqual(-2 * interests, ai0.computeGetCardValue(gc, 7))
-    buildingValue = 3 * b.getShareValueForScore(finalShareScore[0][1]) - 10
-    self.assertEqual(buildingValue * 0.7 - interests,
+    buildingValue = 3 * b.getShareValueForScore(maxShareScore[0][1]) - 10
+    mult = ai0.loanMultiplier
+    self.assertEqual(buildingValue * mult - interests,
         ai0.computeGetCardValue(gc, 8))
-    self.assertEqual(-interests, ai0.computeGetCardValue(gc, 9))
+    self.assertEqual(round(buildingValue * mult * mult - interests, 3),
+        round(ai0.computeGetCardValue(gc, 9), 3))
     self.assertEqual(4, ai0.computeGetCardValue(gc, 10))
 
   def testComputeGetMoneyOnGoodsValue(self):
@@ -387,16 +407,6 @@ class BasicAiTests(unittest.TestCase):
     self.assertEqual((currentValue - finalValue) * 4,
         ai0.computeSellShareValue(gc, ShareCard(Resources.Red, 4)))
 
-  def testComputePayLoanValue(self):
-    b = Board()
-    gc = gamecontroller.GameController(b)
-    ai0, ai1, ai2, ai3 = [gc.ais[i] for i in range(4)]
-    b.advanceShareScore(Resources.Red, 17)
-    currentValue = b.getShareValueForScore(17)
-    finalValue = b.getShareValueForScore(finalShareScore[0][17])
-    self.assertEqual((currentValue - finalValue) * 4,
-        ai0.computeSellShareValue(gc, ShareCard(Resources.Red, 4)))
-
   def testComputeBuildValue(self):
     b = Board()
     gc = gamecontroller.GameController(b)
@@ -418,9 +428,9 @@ class BasicAiTests(unittest.TestCase):
     p0.addCard(WorkforceCard(0, 1))
     b.advanceShareScore(Resources.Red, 17)
 
-    valueBefore = b.getShareValueForScore(finalShareScore[2][17])
-    valueAfter = b.getShareValueForScore(finalShareScore[2][21])
-    expected = 2 * (valueAfter - valueBefore) + 3 * valueAfter + 4 * 4 - 20
+    valueBefore = b.getShareValueForScore(maxShareScore[2][17])
+    valueAfter = b.getShareValueForScore(maxShareScore[2][21])
+    expected = 2 * (valueAfter - valueBefore) + 3 * valueAfter + 4 * 3 - 20
     self.assertEqual(expected, ai0.computeBuildValue(gc, Resources.Red))
     self.assertEqual(-1000, ai0.computeBuildValue(gc, Resources.Green))
     p0.amount = 10

@@ -41,7 +41,7 @@ class Player:
     level = 0 if not self.levelCard else self.levelCard.level
     for card in self.cards:
       if card.name == 'plusLevel':
-        level += card.bonus
+        level += card.plusLevel
     return level
 
   def getPayoff(self):
@@ -70,7 +70,7 @@ class Player:
       raise RuntimeError('Not enough money or resources to pay for building.')
     needed = payments.copy()
     for card in self.cards:
-      if card.name == 'factory' or card.name == 'goods':
+      if card.name == 'factory' or card.name == 'loanGoods':
         paid = min(needed[card.resource], card.amount)
         needed[card.resource] -= paid
         card.amount -= paid
@@ -80,7 +80,7 @@ class Player:
   def getResources(self):
     available = {good: 0 for good in Goods}
     for card in self.cards:
-      if card.name == 'factory' or card.name == 'goods':
+      if card.name == 'factory' or card.name == 'loanGoods':
         available[card.resource] += card.amount
     return available
 
@@ -90,12 +90,9 @@ class Player:
         self.amount += card.multiplicity * shareValues[card.firm]
     self.cards = [card for card in self.cards if not card.name == 'share']
 
-  def paybackLoans(self):
+  def finalPayoff(self):
     for card in self.cards:
-      if card.type == CardTypes.Loan:
-        self.amount = max(0, self.amount - card.value)
-    self.cards = [card for card in self.cards
-                  if not card.type == CardTypes.Loan]
+      self.amount = max(0, self.amount + card.finalPayoff)
 
   def printState(self):
     print "Player " + str(self.ident) + "  Amount: " + str(self.amount) + \
@@ -112,13 +109,13 @@ class PlayerTests(unittest.TestCase):
       BuildingCard(4, Resources.Red, Resources.Iron),
       BuildingCard(4, Resources.Red, Resources.Iron)
     ])
-    building.setRoof(RoofCard(4, 0))
+    building.setRoof(RoofCard(4, 0, 0))
     player = Player(3, 3, 12)
-    player.addCard(FactoryCard(Resources.Iron, 0, 0, 3))
+    player.addCard(FactoryCard(Resources.Iron, 0, 0, 0, 3))
     self.assertFalse(player.canPayForBuilding(building))
-    player.addCard(GoodsCard(Resources.Iron, 1, 0))
+    player.addCard(LoanGoodsCard(Resources.Iron, 1, 0, 0))
     self.assertTrue(player.canPayForBuilding(building))
-    player.addCard(FactoryCard(Resources.Iron, 0, 0, 40))
+    player.addCard(FactoryCard(Resources.Iron, 0, 0, 0, 40))
     player.amount = 8
     self.assertTrue(player.canPayForBuilding(building))
     player.amount = 7
@@ -126,7 +123,7 @@ class PlayerTests(unittest.TestCase):
     player.amount = 1000
     self.assertFalse(
         player.canPayForBuilding(BuildingColumn(Resources.Red, [])))
-    building.setRoof(FinalRoofCard(10))
+    building.setRoof(FinalRoofCard(10, 5))
     self.assertFalse(player.canPayForBuilding(building))
 
   def testPayForBuilding(self):
@@ -136,21 +133,21 @@ class PlayerTests(unittest.TestCase):
       BuildingCard(4, Resources.Red, Resources.Iron),
       BuildingCard(4, Resources.Red, Resources.Iron)
     ])
-    building.setRoof(RoofCard(4, 0))
+    building.setRoof(RoofCard(4, 0, 0))
     player = Player(3, 3, 16)
-    player.addCard(FactoryCard(Resources.Iron, 0, 0, 3))
+    player.addCard(FactoryCard(Resources.Iron, 0, 0, 0, 3))
     player.payForBuilding(building)
     self.assertEqual(3, player.amount)
     self.assertEqual(0, player.cards[0].amount)
     player.amount = 8
-    player.addCard(GoodsCard(Resources.Iron, 20, 0))
+    player.addCard(LoanGoodsCard(Resources.Iron, 20, 0, 0))
     player.payForBuilding(building)
     self.assertEqual(0, player.amount)
     self.assertEqual(0, player.cards[0].amount)
     self.assertEqual(12, player.cards[1].amount)
     with self.assertRaises(RuntimeError):
       player.payForBuilding(building)
-    building.setRoof(FinalRoofCard(10))
+    building.setRoof(FinalRoofCard(10, 5))
     player.amount = 1000
     with self.assertRaises(RuntimeError):
       player.payForBuilding(building)
@@ -163,9 +160,9 @@ class PlayerTests(unittest.TestCase):
     self.assertEqual(5, player.getLevel())
     player.setLevelCard(LevelCard(2))
     self.assertEqual(5, player.getLevel())
-    player.addCard(PlusLevelCard(2, 0))
+    player.addCard(PlusLevelCard(2, 0, 0))
     self.assertEqual(7, player.getLevel())
-    player.addCard(PlusLevelCard(1, 0))
+    player.addCard(PlusLevelCard(1, 0, 0))
     self.assertEqual(8, player.getLevel())
     with self.assertRaises(RuntimeError):
       player.setLevelCard(BuildingCard(2, Resources.Red, Resources.Red))
@@ -188,13 +185,13 @@ class PlayerTests(unittest.TestCase):
   def testGetPayoff(self):
     player = Player()
     player.setLevelCard(LevelCard(3))
-    player.addCard(FactoryCard(Resources.Iron, 1, 0))   # +6 iron
-    player.addCard(GoodsCard(Resources.Glass, 5, 0)) # No increase.
-    player.addCard(PlusLevelCard(1, 0))
-    player.addCard(WorkforceCard(1, 0))         # +7
-    player.addCard(EquipmentCard(0, 0))         # +7
-    player.addCard(MoneyForLevelCard(4, 3, 0))  # +3
-    player.addCard(MoneyForLevelCard(5, 6, 0))  # Will not activate.
+    player.addCard(FactoryCard(Resources.Iron, 1, 0, 0))    # +6 iron
+    player.addCard(LoanGoodsCard(Resources.Glass, 5, 0, 0)) # No increase.
+    player.addCard(PlusLevelCard(1, 0, 0))
+    player.addCard(WorkforceCard(1, 0, 0))         # +7
+    player.addCard(EquipmentCard(0, 0, 0))         # +7
+    player.addCard(MoneyForLevelCard(4, 3, 0, 0))  # +3
+    player.addCard(MoneyForLevelCard(5, 6, 0, 0))  # Will not activate.
     player.addBonusCard(BonusFactoryCard(1))
     player.addBonusCard(BonusWorkforceCard(2))
     player.addBonusCard(BonusEquipmentCard(3))
@@ -206,13 +203,13 @@ class PlayerTests(unittest.TestCase):
 
   def testPayInterests(self):
     player = Player(3, 3, 50)
-    player.addCard(FactoryCard(Resources.Iron, 1, 1))
-    player.addCard(GoodsCard(Resources.Glass, 5, 1))
-    player.addCard(PlusLevelCard(1, 0))
-    player.addCard(WorkforceCard(1, 2))
-    player.addCard(EquipmentCard(0, 2))
-    player.addCard(MoneyForLevelCard(4, 3, 3))
-    player.addCard(MoneyForLevelCard(5, 6, 1))
+    player.addCard(FactoryCard(Resources.Iron, 1, 1, 0))
+    player.addCard(LoanGoodsCard(Resources.Glass, 5, 1, 0))
+    player.addCard(PlusLevelCard(1, 0, 0))
+    player.addCard(WorkforceCard(1, 2, 0))
+    player.addCard(EquipmentCard(0, 2, 0))
+    player.addCard(MoneyForLevelCard(4, 3, 3, 0))
+    player.addCard(MoneyForLevelCard(5, 6, 1, 0))
     self.assertEqual(0, player.payInterests(0))
     self.assertEqual(50, player.amount)
     self.assertEqual(0, player.payInterests(1))
@@ -234,13 +231,13 @@ class PlayerTests(unittest.TestCase):
 
   def testSellShares(self):
     player = Player()
-    player.addCard(FactoryCard(Resources.Iron, 1, 1))
-    player.addCard(LoanCard(5, 2, 1))
+    player.addCard(FactoryCard(Resources.Iron, 1, 1, 0))
+    player.addCard(LoanCard(5, 2, 0))
     player.addCard(ShareCard(Resources.Green, 3))
     player.addCard(ShareCard(Resources.Red, 2))
-    player.addCard(GoodsCard(Resources.Glass, 5, 1))
+    player.addCard(LoanGoodsCard(Resources.Glass, 5, 1, 0))
     player.addCard(ShareCard(Resources.Green, 2))
-    player.addCard(PlusLevelCard(1, 0))
+    player.addCard(PlusLevelCard(1, 0, 0))
     player.addCard(ShareCard(Resources.Blue, 4))
 
     player.sellShares({
@@ -253,35 +250,30 @@ class PlayerTests(unittest.TestCase):
     for card in player.cards:
       self.assertNotEqual('share', card.name)
 
-  def testPaybackLoans(self):
+  def testFinalPayoff(self):
     player = Player()
     cards = [
-      FactoryCard(Resources.Iron, 1, 1),
-      LoanCard(5, 2, 1),
+      FactoryCard(Resources.Iron, 1, 1, 2),
+      LoanCard(5, 2, -3),
       ShareCard(Resources.Green, 3),
-      LoanCard(8, 2, 1),
-      GoodsCard(Resources.Glass, 5, 1),
-      EmergencyLoanCard(2, 1),
-      PlusLevelCard(1, 0),
-      LoanCard(3, 2, 1),
+      LoanCard(8, 2, -4),
+      LoanGoodsCard(Resources.Glass, 5, 1, -4),
+      EmergencyLoanCard(1, -8),
+      PlusLevelCard(1, 0, 0),
+      LoanCard(3, 2, -1),
     ];
 
     player.amount = 100
     for card in cards:
       player.addCard(card)
-    player.paybackLoans()
-    self.assertEqual(100 - (5 + 8 + 10 + 3), player.amount)
-    for card in player.cards:
-      self.assertNotEqual(CardTypes.Loan, card.type)
+    player.finalPayoff()
+    self.assertEqual(100 + (2 - 3 - 4 - 4 - 8 - 1), player.amount)
 
     player.amount = 10
     for card in cards:
       player.addCard(card)
-    player.paybackLoans()
+    player.finalPayoff()
     self.assertEqual(0, player.amount)
-    for card in player.cards:
-      self.assertNotEqual(CardTypes.Loan, card.type)
-
 
 def main():
     unittest.main()

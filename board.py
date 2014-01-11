@@ -12,129 +12,132 @@ _initialConfidenceMarker = 40
 _firmTrackTrigger = 6
 _firmTrackLength = 10
 _shareValueBracket = [
-  4,   # 4 and -  ==> 0$
-  8,   # 8 and -  ==> 1$
-  11,  #          ==> 2$
-  14,  #          ==> 3$
-  17,  #          ==> 4$
-  19,  #          ==> 5$
-  21,  #          ==> 6$
-  23,  #          ==> 7$
-  25,  #          ==> 8$
-  28,  #          ==> 9$
-  31,  #          ==> 10$
-  34,  #          ==> 11$
-       # 35 and + ==> 12$
+  0,   # 0 and -  ==> 0$
+  0,   # 0 and -  ==> 1$
+  0,   #          ==> 2$
+  0,   #          ==> 3$
+  0,   #          ==> 4$
+  4,   # 4 and -  ==> 5$
+  7,   # 7 and -  ==> 6$
+  10,  #          ==> 7$
+  13,  #          ==> 8$
+  16,  #          ==> 9$
+  18,  #          ==> 10$
+  20,  #          ==> 11$
+  22,  #          ==> 12$
+  23,  #          ==> 13$
+  24,  #          ==> 14$
+  25,  #          ==> 15$
+  26,  #          ==> 16$
+  27,  #          ==> 17$
+  28,  #          ==> 18$
+  29,  #          ==> 19$
+       # 30 and + ==> 20$
 ]
 _interestsBracket = [
-  35,  #  35 and +  ==> 0$
-  30,  #  30 and +  ==> 1$
-  25,  #  25 and +  ==> 2$
-  20,  #  20 and +  ==> 3$
-       #  19 and -  ==> 4$
+  35,  #  30 and +  ==> 0$
+  30,  #  25 and +  ==> 1$
+  25,  #            ==> 2$
+  20,  #            ==> 3$
+       #  14 and -  ==> 4$
 ]
 
 def cardsA():
   return [
-    LoanCard(10, 1, 1),
-    LoanCard(9, 1, 1),
-    LoanCard(9, 1, 1),
-    LoanCard(8, 1, 1),
-    LoanCard(8, 1, 1),
-    LoanCard(7, 1, 1),
+    LoanCard(10, 1, -5),
+    LoanCard(10, 1, -5),
+    LoanCard(9, 1, -5),
+    LoanCard(9, 1, -5),
+    LoanCard(9, 1, -5),
+    AngelInvestorCard(5, 0, 0),
+    AngelInvestorCard(5, 0, 0),
+    AngelInvestorCard(4, 0, 0),
+    LoanGoodsCard(Resources.Iron, 8, 1, -4),
+    LoanGoodsCard(Resources.Brick, 8, 1, -4),
+    LoanGoodsCard(Resources.Glass, 8, 1, -4),
 
-    PlusLevelCard(1, 1),
-    PlusLevelCard(1, 1),
-    WorkforceCard(1, 2),
-    WorkforceCard(0, 1),
-    WorkforceCard(0, 1),
-    EquipmentCard(1, 2),
-    EquipmentCard(0, 1),
-    EquipmentCard(0, 1),
-    FactoryCard(Resources.Iron, 1, 1),
-    FactoryCard(Resources.Brick, 1, 1),
-    FactoryCard(Resources.Glass, 1, 1),
+    FactoryCard(Resources.Iron, 0, 1, 2),
+    FactoryCard(Resources.Brick, 0, 1, 2),
+    FactoryCard(Resources.Glass, 0, 1, 2),
+    WorkforceCard(1, 2, 6),
+    WorkforceCard(1, 2, 6),
+    EquipmentCard(0, 1, 0),
+    EquipmentCard(0, 1, 0),
+    PlusLevelCard(1, 1, 0),
+    MoneyForLevelCard(2, 2, 0, 0),
 
-    GoodsCard(Resources.Iron, 5, 0),
-    GoodsCard(Resources.Brick, 5, 0),
-    GoodsCard(Resources.Glass, 5, 0),
-    MoneyForLevelCard(3, 5, 1),
-    MoneyForLevelCard(4, 6, 1),
-
-    ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard()
   ]
 
 def cardsB():
   return [
-    LoanCard(12, 2, 2),
-    LoanCard(11, 2, 2),
-    LoanCard(11, 2, 2),
-    LoanCard(10, 2, 2),
-    LoanCard(9, 2, 2),
+    LoanCard(8, 1, -4),
+    LoanCard(7, 1, -4),
+    LoanCard(7, 1, -4),
+    LoanCard(6, 1, -4),
+    LoanGoodsCard(Resources.Iron, 6, 1, -4),
+    LoanGoodsCard(Resources.Brick, 6, 1, -4),
+    LoanGoodsCard(Resources.Glass, 6, 1, -4),
+
+    FactoryCard(Resources.Iron, 1, 1, 2),
+    FactoryCard(Resources.Brick, 1, 1, 2),
+    FactoryCard(Resources.Glass, 1, 1, 2),
+    WorkforceCard(2, 2, 6),
+    EquipmentCard(1, 1, 0),
+    PlusLevelCard(1, 1, 0),
+    MoneyForLevelCard(4, 3, 0, 0),
+    MoneyForLevelCard(5, 4, 0, 0),
+    FinalMoneyCard(2, 30),
 
     ActionCard(),
     ActionCard(),
     ActionCard(),
     ActionCard(),
-
-    WorkforceCard(2, 2),
-    WorkforceCard(1, 1),
-    EquipmentCard(2, 2),
-    EquipmentCard(1, 1),
-    FactoryCard(Resources.Iron, 2, 1),
-    FactoryCard(Resources.Brick, 2, 1),
-    FactoryCard(Resources.Glass, 2, 1),
-
-    GoodsCard(Resources.Iron, 7, 2),
-    GoodsCard(Resources.Brick, 7, 2),
-    GoodsCard(Resources.Glass, 7, 2),
-    BonusTokenCard(5, 0),
-    BonusTokenCard(5, 0),
-    BonusTokenCard(5, 0),
+    ActionCard(),
+    ActionCard(),
 
     ConfidenceDecreaseCard(),
     ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard()
   ]
 
 def cardsC():
   return [
-    LoanCard(8, 2, 3),
-    LoanCard(7, 2, 3),
+    LoanCard(16, 1, -4),
+    LoanGoodsCard(Resources.Iron, 8, 1, -4),
+    LoanGoodsCard(Resources.Brick, 8, 1, -4),
+    LoanGoodsCard(Resources.Glass, 8, 1, -4),
 
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-    ActionCard(),
-
+    FactoryCard(Resources.Iron, 2, 1, 2),
+    FactoryCard(Resources.Brick, 2, 1, 2),
+    FactoryCard(Resources.Glass, 2, 1, 2),
+    WorkforceCard(6, 3, 6),
+    EquipmentCard(4, 2, 0),
+    MoneyForLevelCard(6, 5, 0, 0),
     ShareCard(Resources.Red, 1),
     ShareCard(Resources.Green, 1),
     ShareCard(Resources.Blue, 1),
-    WorkforceCard(4, 2),
-    EquipmentCard(4, 2),
 
-    MoneyForLevelCard(5, 8, 1),
-    MoneyForLevelCard(6, 9, 1),
-    UpgradeCard(0),
-    UpgradeCard(0),
-    UpgradeCard(0),
-    UpgradeCard(0),
-    UpgradeCard(0),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
+    ActionCard(),
 
     ConfidenceDecreaseCard(),
     ConfidenceDecreaseCard(),
     ConfidenceDecreaseCard(),
     ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
-    ConfidenceDecreaseCard(),
+    ConfidenceDecreaseCard()
   ]
 
 def initialBuildings(firm):
@@ -142,16 +145,16 @@ def initialBuildings(firm):
   second = resources.nextGoods(first)
   third = resources.nextGoods(second)
   result = [
+    BuildingCard(2, firm, Resources.Bank),
+    BuildingCard(2, firm, Resources.Bank),
+    BuildingCard(2, firm, Resources.Bank),
     BuildingCard(3, firm, firm),
     BuildingCard(3, firm, firm),
     BuildingCard(3, firm, firm),
     BuildingCard(4, firm, first),
     BuildingCard(4, firm, first),
-    BuildingCard(4, firm, first),
     BuildingCard(5, firm, second),
     BuildingCard(5, firm, second),
-    BuildingCard(5, firm, second),
-    BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
     BuildingCard(6, firm, third),
@@ -162,23 +165,23 @@ def initialBuildings(firm):
 class Board:
   def __init__(self):
     self.roofStack = [
-      FinalRoofCard(10),
-      FinalRoofCard(10),
-      FinalRoofCard(10),
-      RoofCard(6, 10),
-      RoofCard(6, 10),
-      RoofCard(6, 9),
-      RoofCard(6, 8),
-      RoofCard(6, 7),
-      RoofCard(5, 6),
-      RoofCard(5, 5),
-      RoofCard(4, 4),
-      RoofCard(4, 3),
-      RoofCard(3, 2),
-      RoofCard(3, 1),
-      RoofCard(2, 0),
-      RoofCard(2, 0),
-      RoofCard(2, 0)
+      FinalRoofCard(8, 4),
+      FinalRoofCard(8, 4),
+      FinalRoofCard(8, 4),
+      RoofCard(7, 7, 4),
+      RoofCard(7, 7, 4),
+      RoofCard(7, 7, 4),
+      RoofCard(6, 6, 3),
+      RoofCard(6, 6, 3),
+      RoofCard(5, 5, 3),
+      RoofCard(5, 5, 3),
+      RoofCard(4, 4, 2),
+      RoofCard(4, 4, 2),
+      RoofCard(3, 3, 2),
+      RoofCard(3, 3, 2),
+      RoofCard(2, 0, 0),
+      RoofCard(2, 0, 0),
+      RoofCard(2, 0, 0)
     ]
     self.bonusCardForFirm = {
       Resources.Red: BonusFactoryCard(1),
@@ -234,6 +237,9 @@ class Board:
 
   def advancePlayerOnFirmTrack(self, player, firm, count):
     track = self.firmTracks[firm]
+    if player.ident in track[-1]:
+      return  # Already on last space, moving it could cause it to go behind
+              # another token on that same space.
     newSpace = min(count - 1, len(track) - 1)
     for i, space in enumerate(track):
       if player.ident in space:
@@ -290,7 +296,7 @@ class Board:
     for firm in Firms:
       while (self.shareScore[firm] >= self.confidenceMarker):
         self.shareScore[firm] = max(0,
-            self.shareScore[firm] - self.buildingColumn[firm].getProgress())
+            self.shareScore[firm] - self.buildingColumn[firm].getRegress())
 
   def getShareValueForScore(self, score):
     for value, bound in enumerate(_shareValueBracket):
@@ -317,12 +323,10 @@ class Board:
     payments = player.payForBuilding(column)
     for resource in FirmsOrGoods:
       self.revenues[resource] += payments[resource]
-    buildingCard = column.popLargest()
-    roofCard = column.roof
-    self.advanceShareScore(firm, roofCard.progress)
-    player.addCard(buildingCard.flip())
-    player.setLevelCard(roofCard.flip())
+    player.addCard(column.popLargest().flip())
+    player.setLevelCard(column.roof.flip())
     column.setRoof(self.roofStack.pop())
+    self.advanceShareScore(firm, column.roof.progress)
 
   def printState(self):
     for firm in Firms:
@@ -342,7 +346,7 @@ class BoardTests(unittest.TestCase):
       self.assertEqual(2, b.buildingColumn[Resources.Red].roof.cardCount)
       self.assertEqual(2, b.buildingColumn[Resources.Green].roof.cardCount)
       self.assertEqual(2, b.buildingColumn[Resources.Blue].roof.cardCount)
-      self.assertEqual(80, len(b.cardStack))
+      self.assertEqual(22*3 + 3 + 5, len(b.cardStack))
       self.assertEqual(0, b.revenues[Resources.Red])
       self.assertEqual(0, b.revenues[Resources.Green])
       self.assertEqual(0, b.revenues[Resources.Blue])
@@ -420,7 +424,15 @@ class BoardTests(unittest.TestCase):
     b.advancePlayerOnFirmTrack(p2, Resources.Red, 5)
     b.advancePlayerOnFirmTrack(p2, Resources.Red, 5)
     self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
-    self.assertEqual({2: 10}, b.positionsOnFirmTrack(Resources.Blue))
+    self.assertEqual({2: 10}, b.positionsOnFirmTrack(Resources.Red))
+    b.resetFirmTrack(Resources.Red)
+    b.advancePlayerOnFirmTrack(p1, Resources.Red, 10)
+    b.advancePlayerOnFirmTrack(p3, Resources.Red, 15)
+    self.assertEqual([1, 3], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual({1: 10, 3: 10}, b.positionsOnFirmTrack(Resources.Red))
+    b.advancePlayerOnFirmTrack(p1, Resources.Red, 10)
+    self.assertEqual([1, 3], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual({1: 10, 3: 10}, b.positionsOnFirmTrack(Resources.Red))
 
   def testIsFirmTrackTriggering(self):
     b = Board()
@@ -437,13 +449,13 @@ class BoardTests(unittest.TestCase):
     # Doctor the board
     b.buildingColumn[Resources.Red] = BuildingColumn(Resources.Red, [
         BuildingCard(2, Resources.Red, Resources.Bank)])
-    b.buildingColumn[Resources.Red].setRoof(RoofCard(1, 8))
+    b.buildingColumn[Resources.Red].setRoof(RoofCard(1, 3, 8))
     b.buildingColumn[Resources.Green] = BuildingColumn(Resources.Green, [
         BuildingCard(2, Resources.Green, Resources.Bank)])
-    b.buildingColumn[Resources.Green].setRoof(RoofCard(1, 9))
+    b.buildingColumn[Resources.Green].setRoof(RoofCard(1, 1, 9))
     b.buildingColumn[Resources.Blue] = BuildingColumn(Resources.Blue, [
         BuildingCard(2, Resources.Blue, Resources.Bank)])
-    b.buildingColumn[Resources.Blue].setRoof(RoofCard(1, 3))
+    b.buildingColumn[Resources.Blue].setRoof(RoofCard(1, 2, 3))
     b.confidenceMarker = 20
     self.assertEqual(0, b.shareScore[Resources.Red])
     b.advanceShareScore(Resources.Red, 5)
@@ -496,8 +508,8 @@ class BoardTests(unittest.TestCase):
   def testGetShareValue(self):
     b = Board()
     self.assertEqual(0, b.getShareValue(Resources.Red))
-    testCases = [(0, 0), (4, 0), (5, 1), (8, 1), (9, 2), (15, 4), (17, 4),
-                 (18, 5), (34, 11), (35, 12), (60, 12)]
+    testCases = [(0, 0), (1, 5), (4, 5), (5, 6), (7, 6), (9, 7), (17, 10),
+                 (18, 10), (19, 11), (29, 19), (30, 20), (35, 20)]
     for testCase in testCases:
       b.shareScore[Resources.Red] = testCase[0]
       self.assertEqual(testCase[1], b.getShareValue(Resources.Red))
@@ -526,8 +538,8 @@ class BoardTests(unittest.TestCase):
         BuildingCard(3, Resources.Red, Resources.Red),
         ])
     b.buildingColumn[Resources.Red] = column
-    b.roofStack = [RoofCard(5, 6)]
-    column.setRoof(RoofCard(4, 3))
+    b.roofStack = [RoofCard(5, 5, 3)]
+    column.setRoof(RoofCard(4, 4, 2))
 
     p.amount = 20
     b.buildForFirm(p, Resources.Red)
@@ -537,7 +549,7 @@ class BoardTests(unittest.TestCase):
     self.assertIn(ShareCard(Resources.Red, 3), p.cards)
     self.assertEqual(10, b.revenues[Resources.Red])
     self.assertEqual(5, b.revenues[Resources.Glass])
-    self.assertEqual(3, b.shareScore[Resources.Red])
+    self.assertEqual(5, b.shareScore[Resources.Red])
     self.assertEqual(5, column.length())
     self.assertEqual(6, column.getLevel())
 

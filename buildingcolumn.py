@@ -47,6 +47,9 @@ class BuildingColumn:
   def getProgress(self):
     return 0 if not self.roof else self.roof.progress
 
+  def getRegress(self):
+    return 0 if not self.roof else self.roof.regress
+
   def popLargest(self):
     return self.cardColumn.popLargest()
 
@@ -97,17 +100,20 @@ class BuidingColumnTests(unittest.TestCase):
           BuildingCard(4, Resources.Red, Resources.Brick),
           BuildingCard(2, Resources.Red, Resources.Red)] )
     self.assertEqual(0, column.getProgress())
-    column.setRoof(RoofCard(1, 3))
+    column.setRoof(RoofCard(1, 3, 2))
     self.assertEqual(2, column.getLevel())
     self.assertEqual(3, column.getProgress())
-    column.setRoof(RoofCard(3))
+    self.assertEqual(2, column.getRegress())
+    column.setRoof(RoofCard(3, 3, 1))
     self.assertEqual(4, column.getLevel())
     column.cardColumn.popLargest()
     self.assertEqual(3, column.getLevel())
     column.cardColumn.popLargest()
     self.assertEqual(2, column.getLevel())
-    column.setRoof(RoofCard(3))
+    column.setRoof(RoofCard(3, 1, 1))
     self.assertEqual(0, column.length())
+    self.assertEqual(1, column.getProgress())
+    self.assertEqual(1, column.getRegress())
 
   def testSetRoofFail(self):
     column = BuildingColumn(Resources.Red,
@@ -115,12 +121,12 @@ class BuidingColumnTests(unittest.TestCase):
           BuildingCard(3, Resources.Red, Resources.Glass),
           BuildingCard(4, Resources.Red, Resources.Brick),
           BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(RoofCard(3))
+    column.setRoof(RoofCard(3, 3, 2))
     self.assertEqual(4, column.cardColumn.getLevel())
     with self.assertRaises(RuntimeError):
       column.setRoof(BuildingCard(2, Resources.Red, Resources.Red))
     with self.assertRaises(RuntimeError):
-      column.setRoof(RoofCard(2))
+      column.setRoof(RoofCard(2, 2, 1))
 
   def testSetFinalRoof(self):
     column = BuildingColumn(Resources.Red,
@@ -128,10 +134,11 @@ class BuidingColumnTests(unittest.TestCase):
           BuildingCard(3, Resources.Red, Resources.Glass),
           BuildingCard(4, Resources.Red, Resources.Brick),
           BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(FinalRoofCard(10))
+    column.setRoof(FinalRoofCard(10, 6))
     self.assertEqual(0, column.getLevel())
     self.assertEqual(0, column.length())
     self.assertEqual(10, column.getProgress())
+    self.assertEqual(6, column.getRegress())
 
   def testSetRoofNotEnoughCards(self):
     column = BuildingColumn(Resources.Red,
@@ -139,14 +146,16 @@ class BuidingColumnTests(unittest.TestCase):
           BuildingCard(3, Resources.Red, Resources.Glass),
           BuildingCard(1, Resources.Red, Resources.Brick),
           BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(RoofCard(4,6))
+    column.setRoof(RoofCard(4, 6, 3))
     self.assertEqual(3, column.getLevel())
     self.assertEqual(4, column.length())
     self.assertEqual(6, column.getProgress())
-    column.setRoof(RoofCard(5, 7))
+    self.assertEqual(3, column.getRegress())
+    column.setRoof(RoofCard(5, 7, 4))
     self.assertEqual(0, column.getLevel())
     self.assertEqual(0, column.length())
     self.assertEqual(7, column.getProgress())
+    self.assertEqual(4, column.getRegress())
 
   def testCalculatePayment(self):
     column = BuildingColumn(Resources.Red,
@@ -157,7 +166,7 @@ class BuidingColumnTests(unittest.TestCase):
           BuildingCard(4, Resources.Red, Resources.Bank),
           BuildingCard(7, Resources.Red, Resources.Red),
           BuildingCard(4, Resources.Red, Resources.Glass) ])
-    column.setRoof(RoofCard(7))
+    column.setRoof(RoofCard(7, 7, 4))
     expected = {resource: 0 for resource in AllResources}
     expected[Resources.Bank] = 7
     expected[Resources.Iron] = 7
@@ -174,11 +183,11 @@ class BuidingColumnTests(unittest.TestCase):
     goods[Resources.Brick] = 9
     self.assertIsNone(column.calculatePayment(25, goods))
     self.assertEqual(expected, column.calculatePayment(26, goods))
-    column.setRoof(RoofCard(8))
+    column.setRoof(RoofCard(8, 8, 4))
     self.assertIsNone(column.calculatePayment(500, goods))
     column = BuildingColumn(Resources.Red,
         [ BuildingCard(1, Resources.Red, Resources.Iron) ])
-    column.setRoof(FinalRoofCard(10))
+    column.setRoof(FinalRoofCard(10, 5))
     self.assertIsNone(column.calculatePayment(500, goods))
 
 def main():

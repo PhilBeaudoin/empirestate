@@ -2,22 +2,26 @@ import unittest
 import resources
 from resources import Resources, Firms, Goods, FirmsOrGoods
 from buildingcolumn import BuildingColumn
-from basicai import BasicAi
+import basicai
 from cards import *
 from player import Player
 from board import Board
 from random import shuffle
+import copy
 
-_confidenceLossPerLoan = 1
-_confidenceLossPerSale = 2
-_confidenceLossPerEmergencyLoan = 3
-_emergencyLoanCard = EmergencyLoanCard(2, _confidenceLossPerEmergencyLoan)
+_confidenceLossPerSale = 1
+_emergencyLoanCard = EmergencyLoanCard(1, -8)
 
 class GameController:
   def __init__(self, board):
     self.board = board
-    self.players = [Player(i, 3, 5+i) for i in range(4)]
-    self.ais = {player.ident: BasicAi(player) for player in self.players}
+    self.players = [Player(i, 3, 4+i) for i in range(4)]
+    self.ais = {
+      0: basicai.BasicAi(self.players[0]),
+      1: basicai.BasicAi(self.players[1]),
+      2: basicai.BasicAi(self.players[2]),
+      3: basicai.BasicAi(self.players[3]),
+    }
     self.turnIndex = 0
     self.roundIndex = 0
     self.actionsOfRound = []
@@ -62,6 +66,24 @@ class GameController:
       }
       for firm in Firms
     }
+    incomePerPlayer = {player.ident: 0 for player in self.players}
+    factoryIncomePerPlayer = {player.ident: 0 for player in self.players}
+    interestsPerPlayer = {player.ident: 0 for player in self.players}
+    cumuledIncomePerPlayer = {player.ident: 0 for player in self.players}
+    interests = self.board.getInterests()
+    for player in self.players:
+      level = player.getLevel()
+      for card in player.cards:
+        cardCopy = copy.copy(card)
+        cardCopy.amount = 0
+        income = cardCopy.payoff(level, player.bonusCards)
+        incomePerPlayer[player.ident] += income
+        cumuledIncomePerPlayer[player.ident] += income
+        if card.name == 'factory':
+          factoryIncomePerPlayer[player.ident] += cardCopy.amount
+          cumuledIncomePerPlayer[player.ident] += cardCopy.amount
+        interestsPerPlayer[player.ident] += card.upkeep * interests
+        cumuledIncomePerPlayer[player.ident] -= card.upkeep * interests
 
     self.statistics.append({
       'turnIndex': self.turnIndex,
@@ -70,8 +92,14 @@ class GameController:
                           for player in self.players},
       'levelPerPlayer': {player.ident: player.getLevel()
                          for player in self.players},
+      'incomePerPlayer': incomePerPlayer,
+      'factoryIncomePerPlayer': factoryIncomePerPlayer,
+      'interestsPerPlayer': interestsPerPlayer,
+      'cumuledIncomePerPlayer': cumuledIncomePerPlayer,
       'shareScore': {firm: self.board.shareScore[firm] for firm in Firms},
-      'shareValue': {firm: self.board.getShareValue(firm) for firm in Firms}
+      'shareValue': {firm: self.board.getShareValue(firm) for firm in Firms},
+      'confidenceMarker': self.board.confidenceMarker,
+      'interests': interests,
     })
 
   def prepareTurn(self):
@@ -114,7 +142,7 @@ class GameController:
     for player in self.players:
       if player.payInterests(interests) > 0 :
         player.addCard(_emergencyLoanCard)
-        self.board.advanceConfidenceMarker(_confidenceLossPerEmergencyLoan)
+        self.board.advanceConfidenceMarker(_emergencyLoanCard.regress)
 
     # Change player order
     newOrderIdents = self.board.getNewPlayerOrder(self.players)
@@ -138,7 +166,7 @@ class GameController:
     shareValues = {firm: self.board.getShareValue(firm) for firm in Firms}
     for player in self.players:
       player.sellShares(shareValues)
-      player.paybackLoans()
+      player.finalPayoff()
 
   def advanceOnFirmTrack(self, player, firm, count):
     orderBefore = self.board.playerOrderOnFirmTrack(firm)
@@ -161,9 +189,9 @@ class GameController:
     player.addCard(card)
     if goods:
       self.advanceOnFirmTrack(player, resources.mainFirm(goods), 1)
-    if card.type == CardTypes.Loan:
-      self.board.advanceConfidenceMarker(_confidenceLossPerLoan)
-      player.amount += card.value
+    self.board.advanceConfidenceMarker(card.regress)
+    if card.name == 'loan':
+      player.amount += card.amount
     self.actionsOfRound.append({
         'action': 'getCard',
         'player': player.ident,
@@ -226,15 +254,15 @@ class GameController:
       })
 
   def actionPayLoan(self, player, card):
-    if card.name != 'loan':
+    if card.name != 'loan' and card.name != 'loanGoods':
       raise RuntimeError('Trying to pay not a loan card ' + cardToJson(card))
     if card not in player.cards:
       raise RuntimeError('Trying to pay a loan the player doesn\'t hold '
           + cardToJson(card))
-    if player.amount < card.value:
+    if player.amount < -card.finalPayoff:
       raise RuntimeError('Not enough money (' + str(player.amount) + ') ' +
           'to pay back loan: ' + cardToJson(card))
-    player.amount -= card.value
+    player.amount += card.finalPayoff
     player.cards.remove(card)
     self.actionsOfRound.append({
         'action': 'payLoan',
@@ -307,6 +335,13 @@ class BoardControllerTests(unittest.TestCase):
     self.assertNotIn(bonusCard, p0.bonusCards)
     self.assertNotIn(bonusCard, p1.bonusCards)
     self.assertNotIn(bonusCard, p2.bonusCards)
+    gc.advanceOnFirmTrack(p2, Resources.Blue, 10)
+    gc.advanceOnFirmTrack(p3, Resources.Blue, 10)
+    gc.advanceOnFirmTrack(p2, Resources.Blue, 10)
+    self.assertIn(bonusCard, p2.bonusCards)
+    self.assertNotIn(bonusCard, p0.bonusCards)
+    self.assertNotIn(bonusCard, p1.bonusCards)
+    self.assertNotIn(bonusCard, p3.bonusCards)
 
   def testFinalizeTurn(self):
     b = Board()
@@ -324,11 +359,11 @@ class BoardControllerTests(unittest.TestCase):
       Resources.Brick: 44,
       Resources.Glass: 5
     }
-    b.buildingColumn[Resources.Red].setRoof(RoofCard(4, 4))
-    b.buildingColumn[Resources.Green].setRoof(RoofCard(2, 1))
-    b.buildingColumn[Resources.Blue].setRoof(FinalRoofCard(5))
+    b.buildingColumn[Resources.Red].setRoof(RoofCard(4, 4, 2))
+    b.buildingColumn[Resources.Green].setRoof(RoofCard(2, 2, 1))
+    b.buildingColumn[Resources.Blue].setRoof(FinalRoofCard(5, 3))
 
-    b.advanceConfidenceMarker(14)  # Go to interests = 2$
+    b.advanceConfidenceMarker(12)  # Go to interests = 2$
     self.assertEqual(2, b.getInterests())
     confidenceMarkerBefore = b.confidenceMarker
 
@@ -355,26 +390,26 @@ class BoardControllerTests(unittest.TestCase):
 
     # p0 has BonusWorkforceCard
     p0.amount = 1
-    p0.addCard(EquipmentCard(0, 1))                 # Pay: 0+1        Due: 1*2
-    p0.addCard(WorkforceCard(1, 1))                 # Pay: 0+1+1+1    Due: 1*2
-    p0.addCard(WorkforceCard(1, 3))                 # Pay: 0+1+1+1    Due: 3*2
-    p0.addCard(PlusLevelCard(1, 2))                 # Pay: 0          Due: 2*2
-    p0.addCard(FactoryCard(Resources.Glass, 0, 1))  # Pay: 0+1 glass  Due: 1*2
+    p0.addCard(EquipmentCard(0, 1, 0))                 # Pay: 0+1       Due: 1*2
+    p0.addCard(WorkforceCard(1, 1, 0))                 # Pay: 0+1+1+1   Due: 1*2
+    p0.addCard(WorkforceCard(1, 3, 0))                 # Pay: 0+1+1+1   Due: 3*2
+    p0.addCard(PlusLevelCard(1, 2, 0))                 # Pay: 0         Due: 2*2
+    p0.addCard(FactoryCard(Resources.Glass, 0, 1, 0))  # Pay: 0+1 glass Due: 1*2
 
     # p1 has BonusEquipmentCard and BonusFactoryCard
     p1.amount = 40
     p1.setLevelCard(LevelCard(3))
-    p1.addCard(EquipmentCard(1, 2))                 # Pay: 3+1+1      Due: 2*2
-    p1.addCard(FactoryCard(Resources.Iron, 1, 3))   # Pay: 3+1+1 iron Due: 3*2
-    p1.addCard(LoanCard(12, 2, 2))                  # Pay: 0          Due: 2*2
-    p1.addCard(MoneyForLevelCard(3, 5, 1))          # Pay: 5          Due: 1*2
-    p1.addCard(MoneyForLevelCard(4, 10, 1))         # Pay: 0          Due: 1*2
+    p1.addCard(EquipmentCard(1, 2, 0))                # Pay: 3+1+1      Due: 2*2
+    p1.addCard(FactoryCard(Resources.Iron, 1, 3, 0))  # Pay: 3+1+1 iron Due: 3*2
+    p1.addCard(LoanCard(12, 2, 0))                    # Pay: 0          Due: 2*2
+    p1.addCard(MoneyForLevelCard(3, 5, 1, 0))         # Pay: 5          Due: 1*2
+    p1.addCard(MoneyForLevelCard(4, 10, 1, 0))        # Pay: 0          Due: 1*2
 
     # p2 has no bonus card
     p2.amount = 0
     p2.setLevelCard(LevelCard(2))
-    p2.addCard(FactoryCard(Resources.Brick, 1, 3))  # Pay: 2+1 brick  Due: 3*2
-    p2.addCard(WorkforceCard(2, 1))                 # Pay: 2+2        Due: 1*2
+    p2.addCard(FactoryCard(Resources.Brick, 1, 3, 0))  # Pay: 2+1 brick Due: 3*2
+    p2.addCard(WorkforceCard(2, 1, 0))                 # Pay: 2+2       Due: 1*2
 
     # p3 has no bonus card
     p3.amount = 0
@@ -423,42 +458,53 @@ class BoardControllerTests(unittest.TestCase):
     self.assertEqual([1, 2, 0, 3], [p.ident for p in gc.players])
 
     # Check confidence marker (advanced because of emergency loan)
-    self.assertEqual(confidenceMarkerBefore - _confidenceLossPerEmergencyLoan,
-        b.confidenceMarker)
+    self.assertEqual(confidenceMarkerBefore - 1, b.confidenceMarker)
 
   def testFinalizeGame(self):
     b = Board()
     gc = GameController(b)
     p0, p1, p2, p3 = gc.players
     # Doctor the board.
-    b.advanceShareScore(Resources.Red, 20)  # ==> 6$
-    b.advanceShareScore(Resources.Green, 28)  # ==> 9$
-    b.advanceShareScore(Resources.Blue, 35)  # ==> 12$
-
+    b.advanceShareScore(Resources.Red, 20)    # ==> 11$
+    self.assertEqual(11, b.getShareValue(Resources.Red))
+    b.advanceShareScore(Resources.Green, 28)  # ==> 18$
+    self.assertEqual(18, b.getShareValue(Resources.Green))
+    b.advanceShareScore(Resources.Blue, 35)   # ==> 20$
+    self.assertEqual(20, b.getShareValue(Resources.Blue))
 
     p0.amount = 10
-    p0.addCard(EquipmentCard(0, 1))
-    p0.addCard(LoanCard(5, 1, 1))                   # - 5
-    p0.addCard(ShareCard(Resources.Red, 3))         # + 3 * 6$
-    p0.addCard(WorkforceCard(1, 3))
-    p0.addCard(LoanCard(4, 1, 1))                   # - 4$
-    p0.addCard(ShareCard(Resources.Green, 2))       # + 2 * 9$
-    p0.addCard(EmergencyLoanCard(1, 1))             # - 10$
-    p0.addCard(FactoryCard(Resources.Glass, 0, 1))
-    p0.addCard(ShareCard(Resources.Blue, 3))        # + 3 * 12$
+    p0.addCard(EquipmentCard(0, 1, 2))              # + 2$
+    p0.addCard(LoanCard(5, 1, -3))                  # - 3$
+    p0.addCard(ShareCard(Resources.Red, 3))         # + 3 * 11$
+    p0.addCard(WorkforceCard(1, 3, 0))
+    p0.addCard(LoanCard(4, 1, -4))                  # - 4$
+    p0.addCard(ShareCard(Resources.Green, 2))       # + 2 * 18$
+    p0.addCard(EmergencyLoanCard(1, -10))           # - 10$
+    p0.addCard(FactoryCard(Resources.Glass, 0, 1, 0))
+    p0.addCard(ShareCard(Resources.Blue, 3))        # + 3 * 20$
 
     # p1 has BonusEquipmentCard and BonusFactoryCard
-    p1.amount = 5
+    p1.amount = 1
     p1.setLevelCard(LevelCard(3))
-    p1.addCard(EquipmentCard(1, 2))
-    p1.addCard(FactoryCard(Resources.Iron, 1, 3))
-    p1.addCard(LoanCard(6, 2, 2))                   # -6$
-    p1.addCard(MoneyForLevelCard(3, 5, 1))
-    p1.addCard(MoneyForLevelCard(4, 10, 1))
+    p1.addCard(EquipmentCard(1, 2, 5))              # + 5$
+    p1.addCard(FactoryCard(Resources.Iron, 1, 3, 0))
+    p1.addCard(LoanCard(6, 2, -6))                  # - 6$
+    p1.addCard(MoneyForLevelCard(3, 5, 1, 0))
+    p1.addCard(MoneyForLevelCard(4, 10, 1, 0))
+
+    # p3 has BonusEquipmentCard and BonusFactoryCard
+    p3.amount = 0
+    p3.setLevelCard(LevelCard(3))
+    p3.addCard(EquipmentCard(1, 2, 5))              # + 5$
+    p3.addCard(FactoryCard(Resources.Iron, 1, 3, 0))
+    p3.addCard(LoanCard(6, 2, -6))                  # - 6$
+    p3.addCard(MoneyForLevelCard(3, 5, 1, 0))
+    p3.addCard(MoneyForLevelCard(4, 10, 1, 0))
 
     gc.finalizeGame()
-    self.assertEqual(10 - 5 + 3*6 - 4 + 2*9 - 10 + 3*12, p0.amount)
+    self.assertEqual(10 + 2 - 3 + 3*11 - 4 + 2*18 - 10 + 3*20, p0.amount)
     self.assertEqual(0, p1.amount)
+    self.assertEqual(0, p3.amount)
 
 
   def testIdentToPlayer(self):
@@ -478,53 +524,55 @@ class BoardControllerTests(unittest.TestCase):
     for player in gc.players:
       player.amount = 0
     b.cardStack = [
-      FactoryCard(Resources.Glass, 0, 1),
-      WorkforceCard(0, 1),
-      PlusLevelCard(1, 2),
-      GoodsCard(Resources.Iron, 3, 0),
-      MoneyForLevelCard(3, 3, 0),
-      WorkforceCard(0, 1),
+      FactoryCard(Resources.Glass, 0, 1, 1),
+      WorkforceCard(0, 1, 3),
+      PlusLevelCard(1, 2, 0),
+      LoanGoodsCard(Resources.Iron, 3, 0, -4),
+      MoneyForLevelCard(3, 3, 0, 0),
+      WorkforceCard(0, 1, 0),
       ActionCard(),
       UpgradeCard(2),
-      LoanCard(10, 1, 2),
-      LoanCard(8, 1, 2),
-      GoodsCard(Resources.Brick, 4, 0)]
+      LoanCard(10, 1, -5),
+      LoanCard(8, 1, -3),
+      LoanGoodsCard(Resources.Brick, 4, 0, -4)]
     b.prepareTurn()
 
     p0, p1, p2, p3 = gc.players
 
     gc.actionGetCard(p0, 2)  # Advances p0 on blue firm track.
-    self.assertIn(PlusLevelCard(1,2), p0.cards)
+    self.assertIn(PlusLevelCard(1, 2, 0), p0.cards)
     self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
     self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
     self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
     self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
-
-    gc.actionGetCard(p1, 2)  # Does not advance on any track.
-    self.assertIn(GoodsCard(Resources.Iron, 3, 0), p1.cards)
-    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
-    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
-    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
-    self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
-
-    gc.actionGetCard(p2, 0) # Advances p2 on red firm track.
-    self.assertIn(FactoryCard(Resources.Glass, 0, 1), p2.cards)
-    self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
-    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
-    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
-    self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
-    self.assertEqual({2: 1}, b.positionsOnFirmTrack(Resources.Red))
+    self.assertEqual(1, p0.getLevel())
 
     self.assertEqual(confidenceMarkerBefore, b.confidenceMarker)
-    gc.actionGetCard(p3, 5) # Does not advance on any track.
-    self.assertIn(LoanCard(10, 1, 2), p3.cards)
+    gc.actionGetCard(p1, 2)  # Does not advance on any track.
+    self.assertIn(LoanGoodsCard(Resources.Iron, 3, 0, -4), p1.cards)
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+    self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
+    self.assertEqual(confidenceMarkerBefore - 1, b.confidenceMarker)
+
+    gc.actionGetCard(p2, 0) # Advances p2 on red firm track.
+    self.assertIn(FactoryCard(Resources.Glass, 0, 1, 1), p2.cards)
     self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
     self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
     self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
     self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
     self.assertEqual({2: 1}, b.positionsOnFirmTrack(Resources.Red))
-    self.assertEqual(confidenceMarkerBefore - _confidenceLossPerLoan,
-        b.confidenceMarker)
+
+    self.assertEqual(confidenceMarkerBefore - 1, b.confidenceMarker)
+    gc.actionGetCard(p3, 5) # Does not advance on any track.
+    self.assertIn(LoanCard(10, 1, -5), p3.cards)
+    self.assertEqual([2], b.playerOrderOnFirmTrack(Resources.Red))
+    self.assertEqual([], b.playerOrderOnFirmTrack(Resources.Green))
+    self.assertEqual([0], b.playerOrderOnFirmTrack(Resources.Blue))
+    self.assertEqual({0: 1}, b.positionsOnFirmTrack(Resources.Blue))
+    self.assertEqual({2: 1}, b.positionsOnFirmTrack(Resources.Red))
+    self.assertEqual(confidenceMarkerBefore - 2, b.confidenceMarker)
 
   def testActionGetMoneyOnGoods(self):
     b = Board()
@@ -589,8 +637,8 @@ class BoardControllerTests(unittest.TestCase):
         BuildingCard(3, Resources.Red, Resources.Red),
         ])
     b.buildingColumn[Resources.Red] = column
-    b.roofStack = [RoofCard(5, 6)]
-    column.setRoof(RoofCard(4, 3))
+    b.roofStack = [RoofCard(5, 7, 4)]
+    column.setRoof(RoofCard(4, 4, 2))
 
     p2.amount = 20
     gc.actionBuild(p2, Resources.Red)
@@ -600,7 +648,7 @@ class BoardControllerTests(unittest.TestCase):
     self.assertIn(ShareCard(Resources.Red, 3), p2.cards)
     self.assertEqual(10, b.revenues[Resources.Red])
     self.assertEqual(5, b.revenues[Resources.Glass])
-    self.assertEqual(3, b.shareScore[Resources.Red])
+    self.assertEqual(7, b.shareScore[Resources.Red])
     self.assertEqual(5, column.length())
     self.assertEqual(6, column.getLevel())
 
@@ -609,16 +657,16 @@ class BoardControllerTests(unittest.TestCase):
     gc = GameController(b)
 
     # Doctor the board
-    b.advanceShareScore(Resources.Green, 18)  # Share value = 5$
+    b.advanceShareScore(Resources.Green, 16)  # Share value = 9$
 
     confidenceMarkerBefore = b.confidenceMarker
     p0, p1, p2, p3 = gc.players
     p0.amount = 0
     p0.addCard(ShareCard(Resources.Green, 3))
     p0.addCard(ActionCard())
-    gc.actionSellShare(p0, ShareCard(Resources.Green, 3))  # 3 * 5$
+    gc.actionSellShare(p0, ShareCard(Resources.Green, 3))  # 3 * 9$
 
-    self.assertEqual(15, p0.amount)
+    self.assertEqual(27, p0.amount)
     self.assertNotIn(ShareCard(Resources.Green, 3), p0.cards)
     self.assertEqual(confidenceMarkerBefore - _confidenceLossPerSale,
         b.confidenceMarker)
@@ -634,27 +682,33 @@ class BoardControllerTests(unittest.TestCase):
     gc = GameController(b)
 
     p0, p1, p2, p3 = gc.players
-    p2.amount = 10
-    p2.addCard(LoanCard(8, 2, 2))
-    p2.addCard(LoanCard(6, 1, 2))
-    gc.actionPayLoan(p2, LoanCard(8, 2, 2))
+    p2.amount = 9
+    p2.addCard(LoanCard(8, 2, -4))
+    p2.addCard(LoanCard(5, 1, -6))
+    p2.addCard(LoanGoodsCard(Resources.Glass, 6, 1, -3))
 
-    self.assertEqual(2, p2.amount)
-    self.assertNotIn(LoanCard(8, 2, 2), p2.cards)
+    gc.actionPayLoan(p2, LoanCard(8, 2, -4))
+    self.assertEqual(5, p2.amount)
+    self.assertNotIn(LoanCard(8, 2, -4), p2.cards)
 
     with self.assertRaises(RuntimeError):
-      gc.actionPayLoan(p2, LoanCard(6, 1, 2))
+      gc.actionPayLoan(p2, LoanCard(5, 1, -6))
 
     p2.amount = 6
-    gc.actionPayLoan(p2, LoanCard(6, 1, 2))
+    gc.actionPayLoan(p2, LoanCard(5, 1, -6))
     self.assertEqual(0, p2.amount)
-    self.assertNotIn(LoanCard(6, 1, 2), p2.cards)
+    self.assertNotIn(LoanCard(5, 1, -6), p2.cards)
+
+    p2.amount = 9
+    gc.actionPayLoan(p2, LoanGoodsCard(Resources.Glass, 6, 1, -3))
+    self.assertEqual(6, p2.amount)
+    self.assertNotIn(LoanGoodsCard(Resources.Glass, 6, 1, -3), p2.cards)
 
     with self.assertRaises(RuntimeError):
-      gc.actionPayLoan(p0, LoanCard(6, 1, 2))
+      gc.actionPayLoan(p0, LoanCard(6, 1, -3))
 
     with self.assertRaises(RuntimeError):
-      gc.actionPayLoan(p0, EmergencyLoanCard(1, 2))
+      gc.actionPayLoan(p0, EmergencyLoanCard(1, -4))
 
 def main():
     unittest.main()
