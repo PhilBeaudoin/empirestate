@@ -1,82 +1,115 @@
 import unittest
+from random import shuffle
+import types
 import resources
 from cardcolumn import CardColumn
 from resources import Resources, Goods, AllResources
 from mixedcardserror import MixedCardsError
 from cards import *
 
+_shareProgress = [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+]
+
+_reputationIncrement = [
+  0,
+  0,
+  1,
+  3,
+  5,
+  7,
+  9,
+  11
+]
+
 class BuildingColumn:
   def __init__(self, firm, stack):
-    self.cardColumn = CardColumn(firm)
+    self.firm = firm
+    self.cardColumn = []
     self.stack = stack
-    self.roof = None
+    self.numReset = 0
     for card in stack:
       self._checkColumn(card)
+
   def _checkColumn(self, card):
     try:
-      if card.firm != self.cardColumn.firm:
-        raise MixedCardsError(self.cardColumn.firm, card)
+      if card.firm != self.firm:
+        raise MixedCardsError(self.firm, card)
     except AttributeError:
       pass
-  def setRoof(self, roofCard):
-    if roofCard.type != CardTypes.Roof:
-      raise RuntimeError('Expected a roof card, got: ' + cardToJson(roofCard))
-    self.roof = roofCard
-    if roofCard.name == 'finalRoof':
-      self.cardColumn.clear()
-      return
-    if roofCard.cardCount < self.cardColumn.length():
-      raise RuntimeError('Roof card card count (' + str(roofCard.cardCount) +
-                         ') smaller than column length, ' +
-                         str(self.cardColumn.length()))
-    while (self.cardColumn.length() < self.roof.cardCount):
-      if len(self.stack) == 0:
-        self.cardColumn.clear()
-        return
-      self.cardColumn.add(self.stack.pop())
 
-  def getLevel(self):
-    return self.cardColumn.getLevel()
+  def shuffleStack(self):
+    shuffle(self.stack)
 
-  def getLargest(self):
-    return self.cardColumn.getLargest()
+  def refresh(self):
+    while self.stackSize() > 0 and (self.buildingSize() < 2  or
+                                    not self.buildingTop().stop):
+      self.cardColumn.append(self.stack.pop())
+      if (self.buildingSize() > 8):
+        self.stack += self.cardColumn
+        self.cardColumn = []
+        self.shuffleStack();
+        self.numReset += 1
+    if (self.buildingSize() < 2):
+      if self.stackSize() != 0:
+        raise RuntimeError('Building with less than two cards but stack is ' +
+                           'not empty, this should never happen.')
+      # Not enough cards, close the building
+      self.cardColumn = []
 
-  def length(self):
-    return self.cardColumn.length()
+  def buildingValue(self):
+    return 0 if self.buildingSize() == 0 else self.cardColumn[-1].value
+
+  def buildingTop(self):
+    return None if self.buildingSize() == 0 else self.cardColumn[-1]
+
+  def buildingSize(self):
+    return len(self.cardColumn)
+
+  def stackSize(self):
+    return len(self.stack)
 
   def getProgress(self):
-    return 0 if not self.roof else self.roof.progress
+    return _shareProgess[self.buildingSize()]
 
   def getRegress(self):
-    return 0 if not self.roof else self.roof.regress
+    return -4
 
-  def popLargest(self):
-    return self.cardColumn.popLargest()
+  def popTop(self):
+    return self.cardColumn.pop()
 
   def calculatePayment(self, amount = None, goods = None):
     """|amount| is the amount of money the player has, |goods| is a map from
        goods to the amount of goods of that type the player has. Returns None if
        the amount and goods cannot pay for the building, otherwise return a map
-       from resources to the amount that must be paid on each resource."""
-    level = self.getLevel()
-    if level == 0 or self.length() == 0:
+       from resources to the amount that must be paid on each resource. If
+       |amount| is None, assumes the player has enough resources."""
+    value = self.buildingValue()
+    if value == 0 or self.buildingSize() == 0:
       return None
     if amount is None:
-      amount = level * self.length()
+      amount = value * self.buildingSize()
       available = {good: 0 for good in Goods}
     else :
       available = goods.copy()
     payments = {resource: 0 for resource in AllResources}
-    for card in self.cardColumn.getCards():
-      neededFromAmount = level
+    for card in self.cardColumn:
+      neededFromAmount = value
       if resources.isGoods(card.resource):
-        used = min(level, available[card.resource])
+        used = min(value, available[card.resource])
         available[card.resource] -= used
         neededFromAmount -= used
       if amount < neededFromAmount:
         return None
       amount -= neededFromAmount
-      payments[card.resource] += level
+      payments[card.resource] += value
     return payments
 
   def printState(self):
@@ -86,109 +119,99 @@ class BuidingColumnTests(unittest.TestCase):
   def testMixedStackFail(self):
     try:
       column = BuildingColumn(Resources.Green,
-                              [BuildingCard(1, Resources.Blue, Resources.Iron)])
+          [BuildingCard(1, Resources.Blue, Resources.Iron, False)])
     except MixedCardsError as error:
       self.assertEqual(Resources.Green, error.firm)
       self.assertEqual(Resources.Blue, error.card.firm)
     else:
       self.fail()
 
-  def testSetRoof(self):
+  def testRefresh(self):
     column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron),
-          BuildingCard(3, Resources.Red, Resources.Glass),
-          BuildingCard(4, Resources.Red, Resources.Brick),
-          BuildingCard(2, Resources.Red, Resources.Red)] )
-    self.assertEqual(0, column.getProgress())
-    column.setRoof(RoofCard(1, 3, 2))
-    self.assertEqual(2, column.getLevel())
-    self.assertEqual(3, column.getProgress())
-    self.assertEqual(2, column.getRegress())
-    column.setRoof(RoofCard(3, 3, 1))
-    self.assertEqual(4, column.getLevel())
-    column.cardColumn.popLargest()
-    self.assertEqual(3, column.getLevel())
-    column.cardColumn.popLargest()
-    self.assertEqual(2, column.getLevel())
-    column.setRoof(RoofCard(3, 1, 1))
-    self.assertEqual(0, column.length())
-    self.assertEqual(1, column.getProgress())
-    self.assertEqual(1, column.getRegress())
-
-  def testSetRoofFail(self):
-    column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron),
-          BuildingCard(3, Resources.Red, Resources.Glass),
-          BuildingCard(4, Resources.Red, Resources.Brick),
-          BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(RoofCard(3, 3, 2))
-    self.assertEqual(4, column.cardColumn.getLevel())
-    with self.assertRaises(RuntimeError):
-      column.setRoof(BuildingCard(2, Resources.Red, Resources.Red))
-    with self.assertRaises(RuntimeError):
-      column.setRoof(RoofCard(2, 2, 1))
-
-  def testSetFinalRoof(self):
-    column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron),
-          BuildingCard(3, Resources.Red, Resources.Glass),
-          BuildingCard(4, Resources.Red, Resources.Brick),
-          BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(FinalRoofCard(10, 6))
-    self.assertEqual(0, column.getLevel())
-    self.assertEqual(0, column.length())
-    self.assertEqual(10, column.getProgress())
-    self.assertEqual(6, column.getRegress())
-
-  def testSetRoofNotEnoughCards(self):
-    column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron),
-          BuildingCard(3, Resources.Red, Resources.Glass),
-          BuildingCard(1, Resources.Red, Resources.Brick),
-          BuildingCard(2, Resources.Red, Resources.Red)] )
-    column.setRoof(RoofCard(4, 6, 3))
-    self.assertEqual(3, column.getLevel())
-    self.assertEqual(4, column.length())
-    self.assertEqual(6, column.getProgress())
-    self.assertEqual(3, column.getRegress())
-    column.setRoof(RoofCard(5, 7, 4))
-    self.assertEqual(0, column.getLevel())
-    self.assertEqual(0, column.length())
-    self.assertEqual(7, column.getProgress())
-    self.assertEqual(4, column.getRegress())
+        [ BuildingCard(3, Resources.Red, Resources.Iron, False),
+          BuildingCard(5, Resources.Red, Resources.Iron, False),
+          BuildingCard(4, Resources.Red, Resources.Brick, True),  # 4th
+          BuildingCard(3, Resources.Red, Resources.Iron, True),   # 3rd
+          BuildingCard(2, Resources.Red, Resources.Iron, False),
+          BuildingCard(2, Resources.Red, Resources.Iron, False),
+          BuildingCard(5, Resources.Red, Resources.Iron, False),
+          BuildingCard(2, Resources.Red, Resources.Iron, False),
+          BuildingCard(3, Resources.Red, Resources.Iron, False),
+          BuildingCard(5, Resources.Red, Resources.Iron, True),   # 2nd
+          BuildingCard(1, Resources.Red, Resources.Glass, False),
+          BuildingCard(4, Resources.Red, Resources.Brick, True),  # 1st
+          BuildingCard(2, Resources.Red, Resources.Red, True)] )
+    def fakeShuffle(column):
+      self.assertEqual(9, column.stackSize())
+      column.stack = [
+        BuildingCard(2, Resources.Red, Resources.Iron, False),    # 6th
+        BuildingCard(5, Resources.Red, Resources.Iron, False),    # 7th
+        BuildingCard(6, Resources.Red, Resources.Iron, True),     # 5th
+        BuildingCard(3, Resources.Red, Resources.Iron, False)
+      ]
+    column.shuffleStack = types.MethodType(fakeShuffle, column)
+    self.assertEqual(0, column.buildingSize())
+    column.refresh()
+    self.assertEqual(4, column.buildingValue())
+    self.assertEqual(2, column.buildingSize())
+    column.refresh()
+    self.assertEqual(4, column.buildingValue())
+    self.assertEqual(2, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(5, column.buildingValue())
+    self.assertEqual(3, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(3, column.buildingValue())
+    self.assertEqual(8, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(4, column.buildingValue())
+    self.assertEqual(8, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(6, column.buildingValue())
+    self.assertEqual(2, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(2, column.buildingValue())
+    self.assertEqual(3, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(5, column.buildingValue())
+    self.assertEqual(2, column.buildingSize())
+    column.popTop()
+    column.refresh()
+    self.assertEqual(0, column.buildingValue())
+    self.assertEqual(0, column.buildingSize())
 
   def testCalculatePayment(self):
     column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron),
-          BuildingCard(3, Resources.Red, Resources.Glass),
-          BuildingCard(4, Resources.Red, Resources.Brick),
-          BuildingCard(3, Resources.Red, Resources.Red),
-          BuildingCard(4, Resources.Red, Resources.Bank),
-          BuildingCard(7, Resources.Red, Resources.Red),
-          BuildingCard(4, Resources.Red, Resources.Glass) ])
-    column.setRoof(RoofCard(7, 7, 4))
+        [ BuildingCard(6, Resources.Red, Resources.Iron, True),
+          BuildingCard(3, Resources.Red, Resources.Glass, False),
+          BuildingCard(4, Resources.Red, Resources.Brick, False),
+          BuildingCard(3, Resources.Red, Resources.Red, False),
+          BuildingCard(4, Resources.Red, Resources.Bank, False),
+          BuildingCard(7, Resources.Red, Resources.Red, False),
+          BuildingCard(4, Resources.Red, Resources.Glass, False) ])
+    column.refresh()
     expected = {resource: 0 for resource in AllResources}
-    expected[Resources.Bank] = 7
-    expected[Resources.Iron] = 7
-    expected[Resources.Glass] = 14
-    expected[Resources.Brick] = 7
-    expected[Resources.Red] = 14
+    expected[Resources.Bank] = 6
+    expected[Resources.Iron] = 6
+    expected[Resources.Glass] = 12
+    expected[Resources.Brick] = 6
+    expected[Resources.Red] = 12
     self.assertEqual(expected, column.calculatePayment())
     goods = { good: 0 for good in Goods }
     self.assertIsNone(column.calculatePayment(0, goods))
-    self.assertIsNone(column.calculatePayment(48, goods))
-    self.assertEqual(expected, column.calculatePayment(49, goods))
+    self.assertIsNone(column.calculatePayment(41, goods))
+    self.assertEqual(expected, column.calculatePayment(42, goods))
     goods[Resources.Iron] = 3
-    goods[Resources.Glass] = 13
+    goods[Resources.Glass] = 11
     goods[Resources.Brick] = 9
-    self.assertIsNone(column.calculatePayment(25, goods))
-    self.assertEqual(expected, column.calculatePayment(26, goods))
-    column.setRoof(RoofCard(8, 8, 4))
-    self.assertIsNone(column.calculatePayment(500, goods))
-    column = BuildingColumn(Resources.Red,
-        [ BuildingCard(1, Resources.Red, Resources.Iron) ])
-    column.setRoof(FinalRoofCard(10, 5))
-    self.assertIsNone(column.calculatePayment(500, goods))
+    self.assertIsNone(column.calculatePayment(21, goods))
+    self.assertEqual(expected, column.calculatePayment(22, goods))
 
 def main():
     unittest.main()

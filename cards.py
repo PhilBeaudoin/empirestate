@@ -22,10 +22,11 @@ class Card:
     return str(self.__dict__)
 
 class BuildingCard(Card):
-  def __init__(self, level, firm, resource):
-    self.level = level
+  def __init__(self, value, firm, resource, stop):
+    self.value = value
     self.firm = firm
     self.resource = resource
+    self.stop = stop
     self.name = 'building'
     self.type = CardTypes.Building
   def flip(self):
